@@ -542,17 +542,7 @@ func (vm *VM) GetValidatorSet(height uint64, subnetID ids.ID) (map[ids.NodeID]ui
 // height which is likely (but not guaranteed) to also be older than the
 // window's configured TTL.
 func (vm *VM) GetMinimumHeight() (uint64, error) {
-	oldest, ok := vm.recentlyAccepted.Oldest()
-	if !ok {
-		return vm.GetCurrentHeight()
-	}
-
-	blk, err := vm.GetBlock(oldest)
-	if err != nil {
-		return 0, err
-	}
-
-	return blk.Height() - 1, nil
+	return vm.GetCurrentHeight()
 }
 
 // GetCurrentHeight returns the height of the last accepted block
