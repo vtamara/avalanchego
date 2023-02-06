@@ -916,25 +916,21 @@ func TestIsProcessing(t *testing.T) {
 
 	// Parse blk1
 	parsedBlk1, err := chainState.ParseBlock(context.Background(), blk1.Bytes())
-	if err != nil {
-		t.Fatal("Failed to parse blk1 due to: %w", err)
-	}
+	require.NoError(t, err)
 
 	// Check that it is not processing in consensus
 	require.False(t, chainState.IsProcessing(parsedBlk1.ID()))
 
 	// Verify blk1
-	if err := parsedBlk1.Verify(context.Background()); err != nil {
-		t.Fatal("Parsed blk1 failed verification unexpectedly due to %w", err)
-	}
+	err = parsedBlk1.Verify(context.Background())
+	require.NoError(t, err)
 
 	// Check that it is processing in consensus
 	require.True(t, chainState.IsProcessing(parsedBlk1.ID()))
 
 	// Accept blk1
-	if err := parsedBlk1.Accept(context.Background()); err != nil {
-		t.Fatal("Parsed blk1 failed to accept due to %w", err)
-	}
+	err = parsedBlk1.Accept(context.Background())
+	require.NoError(t, err)
 
 	// Check that it is no longer processing in consensus
 	require.False(t, chainState.IsProcessing(parsedBlk1.ID()))
