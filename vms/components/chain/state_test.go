@@ -219,51 +219,6 @@ func checkRejectedBlock(t *testing.T, s *State, blk snowman.Block, cached bool) 
 	checkDecidedBlock(t, s, blk, choices.Rejected, cached)
 }
 
-func TestIsProcessing(t *testing.T) {
-	testBlks := NewTestBlocks(2)
-	genesisBlock := testBlks[0]
-	genesisBlock.SetStatus(choices.Accepted)
-	blk1 := testBlks[1]
-
-	getBlock, parseBlock, getCanonicalBlockID := createInternalBlockFuncs(t, testBlks)
-	chainState := NewState(&Config{
-		DecidedCacheSize:    2,
-		MissingCacheSize:    2,
-		UnverifiedCacheSize: 2,
-		BytesToIDCacheSize:  2,
-		LastAcceptedBlock:   genesisBlock,
-		GetBlock:            getBlock,
-		UnmarshalBlock:      parseBlock,
-		BuildBlock:          cantBuildBlock,
-		GetBlockIDAtHeight:  getCanonicalBlockID,
-	})
-
-	// Parse blk1
-	parsedBlk1, err := chainState.ParseBlock(context.Background(), blk1.Bytes())
-	if err != nil {
-		t.Fatal("Failed to parse blk1 due to: %w", err)
-	}
-
-	// Check that it is not processing in consensus
-	require.False(t, chainState.IsProcessing(parsedBlk1.ID()))
-
-	// Verify blk1
-	if err := parsedBlk1.Verify(context.Background()); err != nil {
-		t.Fatal("Parsed blk1 failed verification unexpectedly due to %w", err)
-	}
-
-	// Check that it is processing in consensus
-	require.True(t, chainState.IsProcessing(parsedBlk1.ID()))
-
-	// Accept blk1
-	if err := parsedBlk1.Accept(context.Background()); err != nil {
-		t.Fatal("Parsed blk1 failed to accept due to %w", err)
-	}
-
-	// Check that it is no longer processing in consensus
-	require.False(t, chainState.IsProcessing(parsedBlk1.ID()))
-}
-
 func TestState(t *testing.T) {
 	testBlks := NewTestBlocks(3)
 	genesisBlock := testBlks[0]
@@ -938,4 +893,49 @@ func TestStateParseTransitivelyAcceptedBlock(t *testing.T) {
 	if blk1.Height() != parsedBlk1.Height() {
 		t.Fatalf("Parsed blk1 reported incorrect height. Expected %d got %d", blk1.Height(), parsedBlk1.Height())
 	}
+}
+
+func TestIsProcessing(t *testing.T) {
+	testBlks := NewTestBlocks(2)
+	genesisBlock := testBlks[0]
+	genesisBlock.SetStatus(choices.Accepted)
+	blk1 := testBlks[1]
+
+	getBlock, parseBlock, getCanonicalBlockID := createInternalBlockFuncs(t, testBlks)
+	chainState := NewState(&Config{
+		DecidedCacheSize:    2,
+		MissingCacheSize:    2,
+		UnverifiedCacheSize: 2,
+		BytesToIDCacheSize:  2,
+		LastAcceptedBlock:   genesisBlock,
+		GetBlock:            getBlock,
+		UnmarshalBlock:      parseBlock,
+		BuildBlock:          cantBuildBlock,
+		GetBlockIDAtHeight:  getCanonicalBlockID,
+	})
+
+	// Parse blk1
+	parsedBlk1, err := chainState.ParseBlock(context.Background(), blk1.Bytes())
+	if err != nil {
+		t.Fatal("Failed to parse blk1 due to: %w", err)
+	}
+
+	// Check that it is not processing in consensus
+	require.False(t, chainState.IsProcessing(parsedBlk1.ID()))
+
+	// Verify blk1
+	if err := parsedBlk1.Verify(context.Background()); err != nil {
+		t.Fatal("Parsed blk1 failed verification unexpectedly due to %w", err)
+	}
+
+	// Check that it is processing in consensus
+	require.True(t, chainState.IsProcessing(parsedBlk1.ID()))
+
+	// Accept blk1
+	if err := parsedBlk1.Accept(context.Background()); err != nil {
+		t.Fatal("Parsed blk1 failed to accept due to %w", err)
+	}
+
+	// Check that it is no longer processing in consensus
+	require.False(t, chainState.IsProcessing(parsedBlk1.ID()))
 }
