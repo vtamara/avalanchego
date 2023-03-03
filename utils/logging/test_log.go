@@ -5,6 +5,7 @@ package logging
 
 import (
 	"errors"
+	"fmt"
 	"io"
 
 	"go.uber.org/zap"
@@ -21,8 +22,9 @@ var (
 
 type NoLog struct{}
 
-func (NoLog) Write([]byte) (int, error) {
-	return 0, errNoLoggerWrite
+func (NoLog) Write(b []byte) (int, error) {
+	fmt.Printf("NoLog: %s\n", b)
+	return len(b), nil
 }
 
 func (NoLog) Fatal(string, ...zap.Field) {}
