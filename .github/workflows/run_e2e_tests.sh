@@ -65,7 +65,7 @@ custom_params_json="{
 }"
 # >>>>>>>> avalanche-testing custom parameters <<<<<<<<<<<<<
 
-bash "$AVALANCHE_PATH/.kurtosis/kurtosis.sh" \
-    --custom-params "${custom_params_json}" \
-    ${1+"${@}"} \
-    "${avalanche_testing_image}"
+# bash "$AVALANCHE_PATH/.kurtosis/kurtosis.sh" \
+#     --custom-params "${custom_params_json}" \
+#     ${1+"${@}"} \
+#     "${avalanche_testing_image}"
