@@ -118,9 +118,9 @@ func Serve(listener net.Listener, grpcServer *grpc.Server) {
 	// There is nothing to with the error returned by serve here. Later requests
 	// will propegate their error if they occur.
 	err := grpcServer.Serve(listener)
-	fmt.Printf("gprcServer.Server returned with error: %s", err) // TODO use logger instead
+	fmt.Printf("gprcServer.Server returned with error: %s\n", err) // TODO use logger instead
 
 	// Similarly, there is nothing to with an error when the listener is closed.
 	err = listener.Close()
-	fmt.Printf("gprcServer listener returned with error: %s", err) // TODO use logger instead
+	fmt.Printf("gprcServer listener returned with error: %s\n", err) // TODO use logger instead
 }

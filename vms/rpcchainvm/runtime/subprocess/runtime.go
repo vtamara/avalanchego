@@ -70,13 +70,18 @@ func Bootstrap(
 	defer server.GracefulStop()
 	pb.RegisterRuntimeServer(server, gruntime.NewServer(intitializer))
 
+	log := config.Log
+
+	log.Info("starting server")
 	go grpcutils.Serve(listener, server)
 
 	serverAddr := listener.Addr()
+	log.Info("server address", zap.String("address", serverAddr.String()))
 	cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", runtime.EngineAddressKey, serverAddr.String()))
 	// pass golang debug env to subprocess
 	for _, env := range os.Environ() {
 		if strings.HasPrefix(env, "GRPC_") || strings.HasPrefix(env, "GODEBUG") {
+			log.Info("passing env to subprocess", zap.String("env", env))
 			cmd.Env = append(cmd.Env, env)
 		}
 	}
@@ -91,15 +96,17 @@ func Bootstrap(
 	}
 
 	// start subproccess
+	log.Info("starting command")
 	if err := cmd.Start(); err != nil {
 		return nil, nil, fmt.Errorf("failed to start process: %w", err)
 	}
+	log.Info("command started")
 
-	log := config.Log
 	stopper := NewStopper(log, cmd)
 
 	// start stdout collector
 	go func() {
+		log.Info("started stdout collector")
 		_, err := io.Copy(config.Stdout, stdoutPipe)
 		if err != nil {
 			log.Error("stdout collector failed",
@@ -113,6 +120,7 @@ func Bootstrap(
 
 	// start stderr collector
 	go func() {
+		log.Info("started stderr collector")
 		_, err := io.Copy(config.Stderr, stderrPipe)
 		if err != nil {
 			log.Error("stderr collector failed",
@@ -130,13 +138,18 @@ func Bootstrap(
 
 	select {
 	case <-intitializer.initialized:
+		log.Info("initialization done")
 	case <-timeout.C:
+		log.Info("initialization timeout fired")
 		stopper.Stop(ctx)
+		log.Info("stopper done after initialization timeout")
 		return nil, nil, fmt.Errorf("%w: %v", runtime.ErrHandshakeFailed, runtime.ErrProcessNotFound)
 	}
 
 	if intitializer.err != nil {
+		log.Info("initialization error", zap.Error(intitializer.err))
 		stopper.Stop(ctx)
+		log.Info("stopper done after initialization error")
 		return nil, nil, fmt.Errorf("%w: %v", runtime.ErrHandshakeFailed, err)
 	}
 
