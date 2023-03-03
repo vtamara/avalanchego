@@ -13,8 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm/grpcutils"
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm/gruntime"
@@ -72,16 +70,16 @@ func Bootstrap(
 
 	log := config.Log
 
-	log.Info("starting server")
+	fmt.Println("starting server")
 	go grpcutils.Serve(listener, server)
 
 	serverAddr := listener.Addr()
-	log.Info("server address", zap.String("address", serverAddr.String()))
+	fmt.Printf("server address: %s\n", serverAddr.String())
 	cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", runtime.EngineAddressKey, serverAddr.String()))
 	// pass golang debug env to subprocess
 	for _, env := range os.Environ() {
 		if strings.HasPrefix(env, "GRPC_") || strings.HasPrefix(env, "GODEBUG") {
-			log.Info("passing env to subprocess", zap.String("env", env))
+			fmt.Printf("passing env to subprocess: %s", env)
 			cmd.Env = append(cmd.Env, env)
 		}
 	}
@@ -96,40 +94,38 @@ func Bootstrap(
 	}
 
 	// start subproccess
-	log.Info("starting command")
+	fmt.Println("starting command")
 	if err := cmd.Start(); err != nil {
 		return nil, nil, fmt.Errorf("failed to start process: %w", err)
 	}
-	log.Info("command started")
+	fmt.Println("command started")
 
 	stopper := NewStopper(log, cmd)
 
 	// start stdout collector
 	go func() {
-		log.Info("started stdout collector")
+		fmt.Println("started stdout collector")
 		_, err := io.Copy(config.Stdout, stdoutPipe)
 		if err != nil {
-			log.Error("stdout collector failed",
-				zap.Error(err),
+			fmt.Printf("stdout collector failed: %s\n",
+				err,
 			)
 		}
 		stopper.Stop(context.TODO())
 
-		log.Info("stdout collector shutdown")
+		fmt.Println("stdout collector shutdown")
 	}()
 
 	// start stderr collector
 	go func() {
-		log.Info("started stderr collector")
+		fmt.Println("started stderr collector")
 		_, err := io.Copy(config.Stderr, stderrPipe)
 		if err != nil {
-			log.Error("stderr collector failed",
-				zap.Error(err),
-			)
+			fmt.Printf("stderr collector failed: %s\n", err)
 		}
 		stopper.Stop(context.TODO())
 
-		log.Info("stderr collector shutdown")
+		fmt.Println("stderr collector shutdown")
 	}()
 
 	// wait for handshake success
@@ -138,23 +134,23 @@ func Bootstrap(
 
 	select {
 	case <-intitializer.initialized:
-		log.Info("initialization done")
+		fmt.Println("initialization done")
 	case <-timeout.C:
-		log.Info("initialization timeout fired")
+		fmt.Println("initialization timeout fired")
 		stopper.Stop(ctx)
-		log.Info("stopper done after initialization timeout")
+		fmt.Println("stopper done after initialization timeout")
 		return nil, nil, fmt.Errorf("%w: %v", runtime.ErrHandshakeFailed, runtime.ErrProcessNotFound)
 	}
 
 	if intitializer.err != nil {
-		log.Info("initialization error", zap.Error(intitializer.err))
+		fmt.Printf("initialization error: %s\n", intitializer.err)
 		stopper.Stop(ctx)
-		log.Info("stopper done after initialization error")
+		fmt.Println("stopper done after initialization error")
 		return nil, nil, fmt.Errorf("%w: %v", runtime.ErrHandshakeFailed, err)
 	}
 
-	log.Info("plugin handshake succeeded",
-		zap.String("addr", intitializer.vmAddr),
+	fmt.Printf("plugin handshake succeeded %s\n",
+		intitializer.vmAddr,
 	)
 
 	status := &Status{

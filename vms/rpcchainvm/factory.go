@@ -13,7 +13,6 @@ import (
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm/grpcutils"
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm/runtime"
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm/runtime/subprocess"
-	"go.uber.org/zap"
 
 	vmpb "github.com/ava-labs/avalanchego/proto/pb/vm"
 )
@@ -47,32 +46,32 @@ func (f *factory) New(log logging.Logger) (interface{}, error) {
 		return nil, fmt.Errorf("failed to create listener: %w", err)
 	}
 
-	config.Log.Info("starting Bootstrap")
+	fmt.Println("starting Bootstrap")
 	status, stopper, err := subprocess.Bootstrap(
 		context.TODO(),
 		listener,
 		subprocess.NewCmd(f.path),
 		config,
 	)
+	fmt.Printf("Bootstrap returned error: %s\n", err)
 	if err != nil {
-		config.Log.Info("Bootstrap returned error", zap.Error(err))
 		return nil, err
 	}
 
-	config.Log.Info("Bootstrap returned status", zap.Any("status", status))
+	fmt.Printf("Bootstrap returned status: %+v\n", status)
 	clientConn, err := grpcutils.Dial(status.Addr)
 	if err != nil {
-		config.Log.Info("grpcutils.Dial returned error", zap.Error(err))
+		fmt.Printf("grpcutils.Dial returned error: %s\n", err)
 		return nil, err
 	}
-	config.Log.Info("grpcutils.Dial returned nil")
+	fmt.Println("grpcutils.Dial returned nil")
 
 	vm := NewClient(vmpb.NewVMClient(clientConn))
 	vm.SetProcess(stopper, status.Pid, f.processTracker)
 
 	f.runtimeTracker.TrackRuntime(stopper)
 
-	config.Log.Info("factory New returned")
+	fmt.Println("factory New returned")
 
 	return vm, nil
 }
