@@ -2,8 +2,8 @@ name: build-public-ami
 
 on:
   push:
-    tags:
-      - "*"
+    branch:
+      - "charlie-test"
   workflow_dispatch:
     inputs:
       tag:

@@ -28,7 +28,11 @@ if 'rc' in tag:
 
 def packer_build(packerfile):
   p = packer.Packer(packerfile)
-  output = p.build(parallel=False, debug=False, force=False)
+  try:
+    output = p.build(parallel=False, debug=False, force=False)
+  except sh.ErrorReturnCode_1 as e:
+    print("STDOUT from error:", e.stdout.decode())
+
   found = re.findall('ami-[a-z0-9]*', str(output))
   return found[-1]
 
