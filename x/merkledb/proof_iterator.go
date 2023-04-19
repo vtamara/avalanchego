@@ -132,20 +132,6 @@ func (i *proofIterator) Next() bool {
 	node := i.proof[i.nodeIndex]
 	childIdx, alreadyVisitedNode := i.nextChildIndex[i.nodeIndex]
 
-	// for childIdx == int(NodeBranchFactor) {
-	// 	// We've visited all the children of this node.
-	// 	// Ascend to the previous node.
-	// 	if i.nodeIndex == 0 {
-	// 		// We've visited all the nodes in the proof.
-	// 		i.exhausted = true
-	// 		i.key = EmptyPath
-	// 		i.value = ids.Empty
-	// 		return false
-	// 	}
-	// 	i.nodeIndex--
-	// 	childIdx = i.nextChildIndex[i.nodeIndex]
-	// }
-
 	if !alreadyVisitedNode {
 		// The node itself should be visited next.
 		i.key = i.nodeToPath[i.nodeIndex]
@@ -157,7 +143,8 @@ func (i *proofIterator) Next() bool {
 
 	// Find the next child index to visit for this node.
 	if !alreadyVisitedNode {
-		// We just visited this node.
+		// We just visited this node. Next timime we visit it,
+		// we should visit the first child.
 		// In the loop below, start looking from child index 0.
 		childIdx = -1
 	}
@@ -173,10 +160,21 @@ func (i *proofIterator) Next() bool {
 	}
 	i.nextChildIndex[i.nodeIndex] = nextChildIndex
 
-	// If the next child is in the proof, descend to it.
+	// If the next child is in the proof, visit it next.
 	if i.nodeIndex != len(i.proof)-1 &&
 		i.nodeToBranchIndex[i.nodeIndex] == byte(nextChildIndex) &&
 		len(i.proof[i.nodeIndex+1].Children) > 0 {
+		// Since we'll visit the child node next,
+		// mark that we don't need to visit [node]'s child
+		// at [nextChildIndex] when we visit [node] again.
+		newNextChildIndex := NodeBranchFactor
+		for j := byte(nextChildIndex) + 1; j <= NodeBranchFactor; j++ {
+			if _, ok := node.Children[j]; ok {
+				newNextChildIndex = int(j)
+				break
+			}
+		}
+		i.nextChildIndex[i.nodeIndex] = newNextChildIndex
 		i.nodeIndex++
 	}
 
