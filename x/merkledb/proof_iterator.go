@@ -152,8 +152,7 @@ func (i *proofIterator) Next() bool {
 	var nextChildIndex int
 	if visitedNode {
 		// We just visited this node.
-		// In the loop below, start looking from child index 0
-		// for the next child.
+		// In the loop below, start looking from child index 0.
 		childIdx = -1
 	}
 	// Use <= j so that if there are no more children,
@@ -167,22 +166,19 @@ func (i *proofIterator) Next() bool {
 	}
 	i.nextChildIndex[i.nodeIndex] = nextChildIndex
 
-	// We should descend into the next node if:
-	// 1. We are not at the last node in the proof.
-	// 2. We just returned the child's path/ID.
-	// 3. The next node has children.
-	descended := false
+	// If the next child is in the proof, descend to it.
 	if i.nodeIndex != len(i.proof)-1 &&
-		i.nodeToBranchIndex[i.nodeIndex] == byte(childIdx) &&
+		i.nodeToBranchIndex[i.nodeIndex] == byte(nextChildIndex) &&
 		len(i.proof[i.nodeIndex+1].Children) > 0 {
-		if len(i.proof[i.nodeIndex+1].Children) > 0 {
-			// Descend into the next node.
-			descended = true
-			i.nodeIndex++
-		}
+		i.nodeIndex++
 	}
 
-	if !descended && nextChildIndex == int(NodeBranchFactor) {
+	// If we've visited all the children of this node,
+	// ascend to the nearest node that isn't exhausted.
+	if nextChildIndex == int(NodeBranchFactor) {
+		// Note it's impossible for us to have
+		// just descended to the next proof node
+		// because there's no branch index at [NodeBranchFactor].
 		if i.nodeIndex == 0 {
 			// We are done with the proof.
 			i.exhausted = true
@@ -190,6 +186,13 @@ func (i *proofIterator) Next() bool {
 			// We are done with this node.
 			// Ascend to the node above it, unless we just descended.
 			i.nodeIndex--
+			for i.nextChildIndex[i.nodeIndex] == int(NodeBranchFactor) {
+				if i.nodeIndex == 0 {
+					i.exhausted = true
+					break
+				}
+				i.nodeIndex--
+			}
 		}
 	}
 
