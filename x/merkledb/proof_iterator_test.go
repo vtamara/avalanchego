@@ -218,3 +218,235 @@ func TestNewProofIterator(t *testing.T) {
 		})
 	}
 }
+
+func TestProofIterator(t *testing.T) {
+	testIDs := []ids.ID{}
+	for i := 0; i < 10; i++ {
+		testIDs = append(testIDs, ids.GenerateTestID())
+	}
+
+	type keyValue struct {
+		key   path
+		value ids.ID
+	}
+
+	type test struct {
+		name              string
+		proof             []ProofNode
+		start             path
+		expectedKeyValues []keyValue
+	}
+
+	tests := []test{
+		{
+			name: "1 node with no children; start after node",
+			proof: []ProofNode{
+				{
+					KeyPath: path([]byte{0}).Serialize(),
+				},
+			},
+			start:             path([]byte{0, 1}),
+			expectedKeyValues: []keyValue{},
+		},
+		{
+			name: "1 node with no children; start at node",
+			proof: []ProofNode{
+				{
+					KeyPath: path([]byte{0}).Serialize(),
+				},
+			},
+			start: path([]byte{0}),
+			expectedKeyValues: []keyValue{
+				{
+					key:   path([]byte{0}),
+					value: ids.Empty,
+				},
+			},
+		},
+		{
+			name: "1 node with no children; start before node",
+			proof: []ProofNode{
+				{
+					KeyPath: path([]byte{1}).Serialize(),
+				},
+			},
+			start: path([]byte{0}),
+			expectedKeyValues: []keyValue{
+				{
+					key:   path([]byte{1}),
+					value: ids.Empty,
+				},
+			},
+		},
+		{
+			name: "1 node with 1 non-node child; iterate over all",
+			proof: []ProofNode{
+				{
+					KeyPath: path([]byte{0}).Serialize(),
+					Children: map[byte]ids.ID{
+						0: testIDs[0],
+					},
+				},
+			},
+			start: path([]byte{0}),
+			expectedKeyValues: []keyValue{
+				{
+					key:   path([]byte{0}),
+					value: ids.Empty,
+				},
+				{
+					key:   path([]byte{0, 0}),
+					value: testIDs[0],
+				},
+			},
+		},
+		{
+			name: "1 node with 1 non-node child; iterate over only child",
+			proof: []ProofNode{
+				{
+					KeyPath: path([]byte{0}).Serialize(),
+					Children: map[byte]ids.ID{
+						0: testIDs[0],
+					},
+				},
+			},
+			start: path([]byte{0, 0}),
+			expectedKeyValues: []keyValue{
+				{
+					key:   path([]byte{0, 0}),
+					value: testIDs[0],
+				},
+			},
+		},
+		{
+			name: "1 node with 1 non-node child; iterate over none",
+			proof: []ProofNode{
+				{
+					KeyPath: path([]byte{0}).Serialize(),
+					Children: map[byte]ids.ID{
+						0: testIDs[0],
+					},
+				},
+			},
+			start:             path([]byte{0, 0, 1}), // Greater than any key in proof
+			expectedKeyValues: []keyValue{},
+		},
+		{
+			name: "1 node with multiple non-node children; iterate over none",
+			proof: []ProofNode{
+				{
+					KeyPath: path([]byte{0}).Serialize(),
+					Children: map[byte]ids.ID{
+						0: testIDs[0],
+						1: testIDs[1],
+					},
+				},
+			},
+			start:             path([]byte{1}), // Greater than any key in proof
+			expectedKeyValues: []keyValue{},
+		},
+		{
+			name: "1 node with multiple non-node children; iterate over last child",
+			proof: []ProofNode{
+				{
+					KeyPath: path([]byte{0}).Serialize(),
+					Children: map[byte]ids.ID{
+						0: testIDs[0],
+						1: testIDs[1],
+					},
+				},
+			},
+			start: path([]byte{0, 1}),
+			expectedKeyValues: []keyValue{
+				{
+					key:   path([]byte{0, 1}),
+					value: testIDs[1],
+				},
+			},
+		},
+		{
+			name: "1 node with multiple non-node children; iterate over all",
+			proof: []ProofNode{
+				{
+					KeyPath: path([]byte{0}).Serialize(),
+					Children: map[byte]ids.ID{
+						0: testIDs[0],
+						1: testIDs[1],
+					},
+				},
+			},
+			start: path([]byte{0}),
+			expectedKeyValues: []keyValue{
+				{
+					key:   path([]byte{0}),
+					value: ids.Empty,
+				},
+				{
+					key:   path([]byte{0, 0}),
+					value: testIDs[0],
+				},
+				{
+					key:   path([]byte{0, 1}),
+					value: testIDs[1],
+				},
+			},
+		},
+		{
+			name: "1 node with 1 node child; iterate over none",
+			proof: []ProofNode{
+				{
+					KeyPath: path([]byte{0}).Serialize(),
+					Children: map[byte]ids.ID{
+						0: testIDs[0],
+					},
+				},
+				{
+					KeyPath:  path([]byte{0, 0, 1}).Serialize(),
+					Children: map[byte]ids.ID{},
+				},
+			},
+			start:             path([]byte{1}), // Greater than any key in proof
+			expectedKeyValues: []keyValue{},
+		},
+		{
+			name: "1 node with 1 node child; iterate over only child",
+			proof: []ProofNode{
+				{
+					KeyPath: path([]byte{0}).Serialize(),
+					Children: map[byte]ids.ID{
+						0: testIDs[0],
+					},
+				},
+				{
+					KeyPath:  path([]byte{0, 0, 1}).Serialize(),
+					Children: map[byte]ids.ID{},
+				},
+			},
+			start: path([]byte{0, 0}),
+			expectedKeyValues: []keyValue{
+				{
+					key:   path([]byte{0, 0, 1}),
+					value: testIDs[0],
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require := require.New(t)
+
+			// Sanity check test parameters.
+			iter := newProofIterator(tt.proof, tt.start)
+
+			i := 0
+			for iter.Next() {
+				require.Less(i, len(tt.expectedKeyValues), "too many iterations")
+				require.Equal(tt.expectedKeyValues[i].key, iter.Key())
+				require.Equal(tt.expectedKeyValues[i].value, iter.Value())
+				i++
+			}
+			require.Equal(len(tt.expectedKeyValues), i)
+		})
+	}
+}
