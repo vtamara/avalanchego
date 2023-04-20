@@ -196,13 +196,7 @@ func (i *proofIterator) Next() bool {
 	}
 
 	// There are no more children to visit at this node.
-	// If this is the first node, we're done.
-	if i.nextNodeIndex == 0 {
-		i.exhausted = true
-		return true
-	}
-
-	// Go up to the next ancestor node that has more children to visit.
+	// Go to the closest previous node that has more children to visit.
 	for i.nextNodeIndex > 0 {
 		i.nextNodeIndex--
 
