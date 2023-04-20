@@ -116,10 +116,7 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 				childKey = nodePath.Append(childIdx)
 			}
 
-			if comp := start.Compare(childKey); comp > 0 {
-				// The child is before [start]. Don't iterate over it.
-				iter.nextChildIndex[nodeIndex] = int(childIdx) + 1
-			} else {
+			if comp := start.Compare(childKey); comp <= 0 {
 				// The child is at/after [start]. We should iterate over it
 				// (and, if it's a node, all its descendants.)
 				if !childIsNode {
@@ -148,9 +145,11 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 					iter.nextChildIndex[nodeIndex] = nextChildIndex
 					iter.nextChildIndex[nodeIndex+1] = visitNodeNextKey
 				}
-				// We don't need to look at any more children.
 				break
 			}
+			// We don't need to look at any more children.
+			// The child is before [start]. Don't iterate over it.
+			iter.nextChildIndex[nodeIndex] = int(childIdx) + 1
 		}
 	}
 	iter.nodeIndex = firstNodeIndex
