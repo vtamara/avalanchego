@@ -213,7 +213,7 @@ func TestNewProofIterator(t *testing.T) {
 			iter := newProofIterator(tt.proof, tt.start)
 			require.Equal(tt.expectedNodeIndex, iter.nextNodeIndex)
 			require.Equal(tt.expectedExhausted, iter.exhausted)
-			require.Equal(tt.expectedChildIndices, iter.nextChildIndex)
+			require.Equal(tt.expectedChildIndices, iter.nodeToLastVisited)
 		})
 	}
 }
@@ -424,7 +424,7 @@ func TestProofIterator(t *testing.T) {
 			start: path([]byte{0, 0}),
 			expectedKeyValues: []keyValue{
 				{
-					key:   path([]byte{0, 0, 1}),
+					key:   path([]byte{0, 0}),
 					value: testIDs[0],
 				},
 			},
@@ -453,7 +453,7 @@ func TestProofIterator(t *testing.T) {
 					value: ids.Empty,
 				},
 				{
-					key:   path([]byte{0, 0, 1}),
+					key:   path([]byte{0, 0}),
 					value: testIDs[0],
 				},
 				{
@@ -486,7 +486,7 @@ func TestProofIterator(t *testing.T) {
 			start: path([]byte{0, 0}),
 			expectedKeyValues: []keyValue{
 				{
-					key:   path([]byte{0, 0, 1}),
+					key:   path([]byte{0, 0}),
 					value: testIDs[0],
 				},
 				{
@@ -530,7 +530,7 @@ func TestProofIterator(t *testing.T) {
 					value: ids.Empty,
 				},
 				{
-					key:   path([]byte{0, 0, 1}),
+					key:   path([]byte{0, 0}),
 					value: testIDs[0],
 				},
 				{
@@ -578,7 +578,7 @@ func TestProofIterator(t *testing.T) {
 			start: path([]byte{0, 0}),
 			expectedKeyValues: []keyValue{
 				{
-					key:   path([]byte{0, 0, 1}),
+					key:   path([]byte{0, 0}),
 					value: testIDs[0],
 				},
 				{

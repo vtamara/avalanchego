@@ -26,13 +26,13 @@ type proofIterator struct {
 	// True iff there are more key/ID pairs to return.
 	exhausted bool
 	// Index of node in [proof] to visit next.
+	// Invariant: The node at this index has at least one child
+	// which has not been visited yet.
+	// TODO make true for root.
 	nextNodeIndex int
-	// Index of node in [proof] --> next child index to visit for that node.
-	// If a key isn't in the map, the node itself should be visited next.
-	// If a value is [NodeBranchFactor], all children have been visited and we
-	// should ascend to the previous node. If there is no previous node, we're done.
-	nextChildIndex map[int]int
-	proof          []ProofNode
+	// TODO comment.
+	nodeToLastVisited map[int]int
+	proof             []ProofNode
 	// Index of node in [proof] --> path of that node.
 	nodeToPath map[int]path
 	// Index of node in [proof] --> Index of the child
@@ -47,7 +47,7 @@ type proofIterator struct {
 func newProofIterator(proof []ProofNode, start path) *proofIterator {
 	iter := &proofIterator{
 		nextNodeIndex:     nextNodeIndexNotFoundVal,
-		nextChildIndex:    map[int]int{},
+		nodeToLastVisited: map[int]int{},
 		proof:             proof,
 		nodeToPath:        map[int]path{},
 		nodeToBranchIndex: map[int]byte{},
@@ -82,57 +82,37 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 		if start.Compare(nodePath) <= 0 {
 			// [start] is at/before this node and all of its children.
 			// All of them should be iterated over.
-			iter.nextChildIndex[nodeIndex] = visitNodeNextVal
-
 			if !foundEligibleStartKey || nodePath.Compare(smallestEligibleStartKey) < 0 {
 				smallestEligibleStartKey = nodePath
 				iter.nextNodeIndex = nodeIndex
 				foundEligibleStartKey = true
 			}
-
 			continue
 		}
 
 		// [start] is after this node's key.
 		// Find which children, if any, we should iterate over.
 		for childIdx := range node.Children {
-			var (
-				childKey    path
-				childIsNode bool
-			)
-			if nodeIndex != len(proof)-1 && iter.nodeToBranchIndex[nodeIndex] == childIdx {
-				// The child is in the proof.
-				childIsNode = true
-				childKey = iter.nodeToPath[nodeIndex+1]
-			} else {
-				// The child is a leaf.
-				childKey = nodePath.Append(childIdx)
-			}
+			childKey := nodePath.Append(childIdx)
 
 			if start.Compare(childKey) > 0 {
 				// The child is before [start]. Don't iterate over it.
 				continue
 			}
-
 			// The child is at/after [start].
-			if !childIsNode {
-				if !foundEligibleStartKey || childKey.Compare(smallestEligibleStartKey) < 0 {
-					smallestEligibleStartKey = childKey
-					iter.nextNodeIndex = nodeIndex
-					foundEligibleStartKey = true
-				}
-				iter.nextChildIndex[nodeIndex] = int(childIdx)
-				break
+			// Mark it as the next child to visit at this node.
+			iter.nodeToLastVisited[nodeIndex] = int(childIdx) - 1
+			if !foundEligibleStartKey || childKey.Compare(smallestEligibleStartKey) < 0 {
+				smallestEligibleStartKey = childKey
+				iter.nextNodeIndex = nodeIndex
+				foundEligibleStartKey = true
 			}
-			// On a subsequent iteration of this loop, we'll find the next child
-			// that is at/after [start] and mark that as the next child of [node]
-			// to visit because the one at [childIdx] is a node which will be
-			// visited first.
+			break
 		}
-		if _, ok := iter.nextChildIndex[nodeIndex]; !ok {
+		if _, ok := iter.nodeToLastVisited[nodeIndex]; !ok {
 			// We didn't find any children that are at/after [start].
 			// Mark this node as exhausted.
-			iter.nextChildIndex[nodeIndex] = NodeBranchFactor
+			iter.nodeToLastVisited[nodeIndex] = NodeBranchFactor
 		}
 	}
 	if iter.nextNodeIndex == nextNodeIndexNotFoundVal {
@@ -150,78 +130,84 @@ func (i *proofIterator) Next() bool {
 	}
 
 	node := i.proof[i.nextNodeIndex]
-	childIdx := i.nextChildIndex[i.nextNodeIndex]
-	shouldVisitNode := childIdx == visitNodeNextVal
-
-	if shouldVisitNode {
-		// The node itself should be visited next.
-		i.key = i.nodeToPath[i.nextNodeIndex]
-		i.value = i.nodeToID[i.nextNodeIndex]
-	} else {
-		i.key = i.nodeToPath[i.nextNodeIndex].Append(byte(childIdx))
-		i.value = node.Children[byte(childIdx)]
+	// Note lastVisited is 0 if we haven't visited this node yet.
+	lastVisited, hasLastVisited := i.nodeToLastVisited[i.nextNodeIndex]
+	if !hasLastVisited {
+		lastVisited = -1
 	}
 
 	// Find the next child index to visit for this node.
-	if shouldVisitNode {
-		// We just visited this node. Next time we visit it,
-		// we should visit the first child.
-		// In the loop below, start looking from child index 0.
-		childIdx = -1
-	}
-	// Use <= j so that if there are no more children,
-	// we set [nextChildIndex] to [NodeBranchFactor],
-	// which indicates that we're done with this node.
-	nextChildIndex := int(NodeBranchFactor)
-	for j := childIdx + 1; j <= int(NodeBranchFactor); j++ {
-		if _, ok := node.Children[byte(j)]; ok {
-			nextChildIndex = j
+	// Note the invariant of [nextNodeIndex] ensures that there is at least one
+	// child to visit.
+	var childIdx int
+	for childIdx = lastVisited + 1; childIdx < NodeBranchFactor; childIdx++ {
+		if _, ok := node.Children[byte(childIdx)]; ok {
 			break
 		}
 	}
-	i.nextChildIndex[i.nextNodeIndex] = nextChildIndex
 
-	// If the next child is in the proof, visit it next.
-	if i.nextNodeIndex != len(i.proof)-1 &&
-		i.nodeToBranchIndex[i.nextNodeIndex] == byte(nextChildIndex) &&
-		len(i.proof[i.nextNodeIndex+1].Children) > 0 {
-		// Since we'll visit the child node next,
-		// mark that we don't need to visit [node]'s child
-		// at [nextChildIndex] when we visit [node] again.
-		newNextChildIndex := NodeBranchFactor
-		for j := byte(nextChildIndex) + 1; j <= NodeBranchFactor; j++ {
-			if _, ok := node.Children[j]; ok {
-				newNextChildIndex = int(j)
-				break
-			}
-		}
-		i.nextChildIndex[i.nextNodeIndex] = newNextChildIndex
-		i.nextNodeIndex++
+	if i.nextNodeIndex == 0 && !hasLastVisited {
+		i.key = i.nodeToPath[i.nextNodeIndex]
+		i.value = ids.Empty
+		i.nodeToLastVisited[i.nextNodeIndex] = -1
+		childIdx = -1
+	} else {
+		i.key = i.nodeToPath[i.nextNodeIndex].Append(byte(childIdx))
+		i.value = node.Children[byte(childIdx)]
+		i.nodeToLastVisited[i.nextNodeIndex] = childIdx
 	}
 
-	// If we've visited all the children of this node,
-	// ascend to the nearest node that isn't exhausted.
-	if nextChildIndex == int(NodeBranchFactor) {
-		// Note it's impossible for us to have
-		// just descended to the next proof node
-		// because there's no branch index at [NodeBranchFactor].
-		if i.nextNodeIndex == 0 {
-			// We are done with the proof.
-			i.exhausted = true
-		} else {
-			// We are done with this node.
-			// Ascend to the node above it, unless we just descended.
-			i.nextNodeIndex--
-			for i.nextChildIndex[i.nextNodeIndex] == int(NodeBranchFactor) {
-				if i.nextNodeIndex == 0 {
-					i.exhausted = true
-					break
-				}
-				i.nextNodeIndex--
-			}
+	// Find next key to visit.
+	if branchIndex, ok := i.nodeToBranchIndex[i.nextNodeIndex]; ok && branchIndex == byte(childIdx) {
+		// We just visited the next node in the proof.
+		// Next iteration we should visit the first child
+		// of that node, if one exists.
+		nextNode := i.proof[i.nextNodeIndex+1]
+		if len(nextNode.Children) > 0 {
+			i.nextNodeIndex++
+			return true
+		}
+		// The next node has no children to iterate over.
+	}
+
+	// Check whether there are more children to visit at this node.
+	for nextChildIndex := childIdx + 1; nextChildIndex < NodeBranchFactor; nextChildIndex++ {
+		if _, ok := node.Children[byte(nextChildIndex)]; ok {
+			// There are more children to visit at this node.
+			// [i.nextNodeIndex] is already set to the correct value.
+			return true
 		}
 	}
 
+	// There are no more children to visit at this node.
+	// If this is the first node, we're done.
+	if i.nextNodeIndex == 0 {
+		i.exhausted = true
+		return true
+	}
+
+	// Go up to the next ancestor node that has more children to visit.
+	for i.nextNodeIndex > 0 {
+		i.nextNodeIndex--
+
+		// Since we just finished iterating over [node], we know that
+		// we're part way through iterating over its parent.
+		// Find the index we visited last in the parent.
+		parentLastVisited := i.nodeToBranchIndex[i.nextNodeIndex]
+		i.nodeToLastVisited[i.nextNodeIndex] = int(parentLastVisited)
+
+		// Check whether there are more children to visit at the parent.
+		parent := i.proof[i.nextNodeIndex]
+		for nextChildIndex := parentLastVisited + 1; nextChildIndex < NodeBranchFactor; nextChildIndex++ {
+			if _, ok := parent.Children[byte(nextChildIndex)]; ok {
+				// There are more children to visit at this node.
+				// [i.nextNodeIndex] is already set to the correct value.
+				return true
+			}
+		}
+	}
+	// There are no more nodes with children to visit.
+	i.exhausted = true
 	return true
 }
 
