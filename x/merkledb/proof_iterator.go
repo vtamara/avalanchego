@@ -72,11 +72,7 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 			return iter
 		}
 
-		for childIdx := byte(0); childIdx < NodeBranchFactor; childIdx++ {
-			if _, ok := node.Children[childIdx]; !ok {
-				continue
-			}
-
+		for childIdx := range node.Children {
 			var (
 				childKey    path
 				childIsNode bool
