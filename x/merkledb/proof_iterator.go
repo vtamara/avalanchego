@@ -204,7 +204,7 @@ func (i *proofIterator) Next() bool {
 		// we're part way through iterating over its parent.
 		// Find the index we visited last in the parent.
 		parentLastVisited := i.nodeToBranchIndex[i.nextNodeIndex]
-		i.nodeToLastVisited[i.nextNodeIndex] = int(parentLastVisited)
+		i.nodeToLastVisited[i.nextNodeIndex] = int(parentLastVisited) // TODO is this needed?
 
 		// Check whether there are more children to visit at the parent.
 		parent := i.proof[i.nextNodeIndex]
@@ -216,6 +216,7 @@ func (i *proofIterator) Next() bool {
 			}
 		}
 	}
+
 	// There are no more nodes with children to visit.
 	i.exhausted = true
 	return true
