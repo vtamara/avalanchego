@@ -210,7 +210,6 @@ func TestNewProofIterator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			require := require.New(t)
 
-			// TODO test first key/value is right
 			iter := newProofIterator(tt.proof, tt.start)
 			require.Equal(tt.expectedNodeIndex, iter.nodeIndex)
 			require.Equal(tt.expectedExhausted, iter.exhausted)
