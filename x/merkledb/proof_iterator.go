@@ -72,7 +72,6 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 	)
 
 	// For each node in the proof, find the next child index to visit.
-	// Start from the last node in the proof.
 	// Note that all keys in a proof node are after the key of the previous proof node.
 	for nodeIndex := 0; nodeIndex < len(proof); nodeIndex++ {
 		node := proof[nodeIndex]
