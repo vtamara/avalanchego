@@ -28,9 +28,9 @@ type proofIterator struct {
 	// Index of node in [proof] to visit next.
 	// Invariant: The node at this index has at least one child
 	// which has not been visited yet.
-	// TODO make true for root.
 	nextNodeIndex int
-	// TODO comment.
+	// Index of node in [proof] --> index of last child visited.
+	// If a key isn't in this map, we haven't visited any of its children yet.
 	nodeToLastVisited map[int]int
 	proof             []ProofNode
 	// Index of node in [proof] --> path of that node.
