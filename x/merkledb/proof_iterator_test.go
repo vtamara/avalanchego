@@ -210,7 +210,7 @@ func TestNewProofIterator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			require := require.New(t)
 
-			iter := newProofIterator(tt.proof, tt.start)
+			iter := NewProofIterator(tt.proof, tt.start)
 			require.Equal(tt.expectedNodeIndex, iter.nextNodeIndex)
 			require.Equal(tt.expectedExhausted, iter.exhausted)
 			require.Equal(tt.expectedChildIndices, iter.nodeToLastVisited)
@@ -646,7 +646,7 @@ func TestProofIterator(t *testing.T) {
 			require := require.New(t)
 
 			// Sanity check test parameters.
-			iter := newProofIterator(tt.proof, tt.start)
+			iter := NewProofIterator(tt.proof, tt.start)
 
 			i := 0
 			for iter.Next() {

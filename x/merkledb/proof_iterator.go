@@ -14,6 +14,14 @@ const (
 	nextNodeIndexNotFoundVal = math.MaxInt
 )
 
+var _ ProofIterator = (*proofIterator)(nil)
+
+type ProofIterator interface {
+	Key() path
+	Value() ids.ID
+	Next() bool
+}
+
 // Iterates over the key prefixes whose existence is proven by the proof.
 // For each key prefix, the value is the hash of the node which is the root
 // of that subtrie.
@@ -44,7 +52,7 @@ type proofIterator struct {
 }
 
 // Assumes len([proof]) > 0.
-func newProofIterator(proof []ProofNode, start path) *proofIterator {
+func NewProofIterator(proof []ProofNode, start path) *proofIterator {
 	iter := &proofIterator{
 		nextNodeIndex:     nextNodeIndexNotFoundVal,
 		nodeToLastVisited: map[int]int{},
