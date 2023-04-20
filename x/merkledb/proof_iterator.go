@@ -95,11 +95,6 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 
 		// [start] is after this node's key.
 		// Find which children, if any, we should iterate over.
-		if len(node.Children) == 0 {
-			// This node has no children.
-			continue
-		}
-
 		for childIdx := range node.Children {
 			var (
 				childKey    path
