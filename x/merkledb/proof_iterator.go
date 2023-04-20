@@ -4,7 +4,14 @@
 package merkledb
 
 import (
+	"math"
+
 	"github.com/ava-labs/avalanchego/ids"
+)
+
+const (
+	visitNodeNextKey = -1
+	firstKeyNotFound = -1
 )
 
 // Iterates over the key prefixes whose existence is proven by the proof.
@@ -61,18 +68,41 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 		iter.nodeToID[i+1] = proof[i].Children[childIndex]
 	}
 
-	// Find the first key to return.
+	// For each node in the proof, find the next child index to visit.
+	var (
+		foundEligibleStartKey    bool
+		smallestEligibleStartKey path
+		firstNodeIndex           = math.MaxInt
+	)
+
 	for nodeIndex := 0; nodeIndex < len(proof); nodeIndex++ {
-		iter.nodeIndex = nodeIndex
 		node := proof[nodeIndex]
 		nodePath := iter.nodeToPath[nodeIndex]
 
 		if start.Compare(nodePath) <= 0 {
-			// The first key to return is the one in [node].
-			return iter
+			// [start] is at/before this node, and therefore all of its descendants.
+			// All of them should be iterated over.
+			iter.nextChildIndex[nodeIndex] = visitNodeNextKey
+
+			// If this is the smallest eligible start key, set node index.
+			if !foundEligibleStartKey || nodePath.Compare(smallestEligibleStartKey) < 0 {
+				smallestEligibleStartKey = nodePath
+				firstNodeIndex = nodeIndex
+				foundEligibleStartKey = true
+			}
+
+			continue
 		}
 
-		for childIdx := range node.Children {
+		// [start] is after this node. Find which children, if any,
+		// we should iterate over.
+		for childIdx := byte(0); childIdx < NodeBranchFactor; childIdx++ {
+			if _, ok := node.Children[childIdx]; !ok {
+				// This child doesn't exist.
+				iter.nextChildIndex[nodeIndex] = int(childIdx) + 1
+				continue
+			}
+
 			var (
 				childKey    path
 				childIsNode bool
@@ -86,13 +116,28 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 				childKey = nodePath.Append(childIdx)
 			}
 
-			if start.Compare(childKey) <= 0 {
-				if childIsNode {
-					// The key/ID pair of the child node is the
-					// first key/ID pair to return.
-					iter.nodeIndex++
+			if comp := start.Compare(childKey); comp > 0 {
+				// The child is before [start]. Don't iterate over it.
+				iter.nextChildIndex[nodeIndex] = int(childIdx) + 1
+			} else {
+				// The child is at/after [start]. We should iterate over it
+				// (and, if it's a node, all its descendants.)
+				if !childIsNode {
+					if !foundEligibleStartKey || childKey.Compare(smallestEligibleStartKey) < 0 {
+						smallestEligibleStartKey = childKey
+						firstNodeIndex = nodeIndex
+						foundEligibleStartKey = true
+					}
+					iter.nextChildIndex[nodeIndex] = int(childIdx)
+				} else {
+					// TODO reduce duplicated code
+					if !foundEligibleStartKey || childKey.Compare(smallestEligibleStartKey) < 0 {
+						smallestEligibleStartKey = childKey
+						firstNodeIndex = nodeIndex + 1
+						foundEligibleStartKey = true
+					}
 					// When we visit [node], we should visit the child
-					// following the one we just descended to.
+					// after this one.
 					nextChildIndex := NodeBranchFactor
 					for j := childIdx + 1; j <= NodeBranchFactor; j++ {
 						if _, ok := node.Children[j]; ok {
@@ -101,23 +146,21 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 						}
 					}
 					iter.nextChildIndex[nodeIndex] = nextChildIndex
-				} else {
-					// The first key to return is the one at [childIdx].
-					iter.nextChildIndex[nodeIndex] = int(childIdx)
+					iter.nextChildIndex[nodeIndex+1] = visitNodeNextKey
 				}
-				return iter
+				// We don't need to look at any more children.
+				break
 			}
 		}
-		// All the children are after [start].
-		iter.nextChildIndex[nodeIndex] = int(NodeBranchFactor)
 	}
-
-	// All keys are after [start].
-	iter.exhausted = true
+	iter.nodeIndex = firstNodeIndex
+	if firstNodeIndex == math.MaxInt {
+		// All keys are after [start].
+		iter.exhausted = true
+	}
 	return iter
 }
 
-// TODO implement
 func (i *proofIterator) Next() bool {
 	if i.exhausted {
 		i.key = EmptyPath
@@ -126,9 +169,10 @@ func (i *proofIterator) Next() bool {
 	}
 
 	node := i.proof[i.nodeIndex]
-	childIdx, alreadyVisitedNode := i.nextChildIndex[i.nodeIndex]
+	childIdx := i.nextChildIndex[i.nodeIndex]
+	shouldVisitNode := childIdx == visitNodeNextKey
 
-	if !alreadyVisitedNode {
+	if shouldVisitNode {
 		// The node itself should be visited next.
 		i.key = i.nodeToPath[i.nodeIndex]
 		i.value = i.nodeToID[i.nodeIndex]
@@ -138,8 +182,8 @@ func (i *proofIterator) Next() bool {
 	}
 
 	// Find the next child index to visit for this node.
-	if !alreadyVisitedNode {
-		// We just visited this node. Next timime we visit it,
+	if shouldVisitNode {
+		// We just visited this node. Next time we visit it,
 		// we should visit the first child.
 		// In the loop below, start looking from child index 0.
 		childIdx = -1

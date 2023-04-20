@@ -600,46 +600,46 @@ func TestProofIterator(t *testing.T) {
 				},
 			},
 		},
-		// {
-		// 	name: "3 proof nodes; skip first two",
-		// 	proof: []ProofNode{
-		// 		{
-		// 			KeyPath: path([]byte{0}).Serialize(),
-		// 			Children: map[byte]ids.ID{
-		// 				1: testIDs[0],
-		// 				2: testIDs[1],
-		// 			},
-		// 		},
-		// 		{
-		// 			KeyPath: path([]byte{0, 1, 1}).Serialize(),
-		// 			Children: map[byte]ids.ID{
-		// 				0: testIDs[4],
-		// 				2: testIDs[2],
-		// 			},
-		// 		},
-		// 		{
-		// 			KeyPath: path([]byte{0, 1, 1, 2}).Serialize(),
-		// 			Children: map[byte]ids.ID{
-		// 				NodeBranchFactor - 1: testIDs[3],
-		// 			},
-		// 		},
-		// 	},
-		// 	start: path([]byte{0, 1, 1, 2}),
-		// 	expectedKeyValues: []keyValue{
-		// 		{
-		// 			key:   path([]byte{0, 0, 1, 2}),
-		// 			value: testIDs[2],
-		// 		},
-		// 		{
-		// 			key:   path([]byte{0, 0, 1, 2, NodeBranchFactor - 1}),
-		// 			value: testIDs[3],
-		// 		},
-		// 		{
-		// 			key:   path([]byte{0, 2}),
-		// 			value: testIDs[1],
-		// 		},
-		// 	},
-		// },
+		{
+			name: "3 proof nodes; skip first two",
+			proof: []ProofNode{
+				{
+					KeyPath: path([]byte{0}).Serialize(),
+					Children: map[byte]ids.ID{
+						1: testIDs[0],
+						2: testIDs[1],
+					},
+				},
+				{
+					KeyPath: path([]byte{0, 1, 1}).Serialize(),
+					Children: map[byte]ids.ID{
+						0: testIDs[4],
+						2: testIDs[2],
+					},
+				},
+				{
+					KeyPath: path([]byte{0, 1, 1, 2}).Serialize(),
+					Children: map[byte]ids.ID{
+						NodeBranchFactor - 1: testIDs[3],
+					},
+				},
+			},
+			start: path([]byte{0, 1, 1, 2}),
+			expectedKeyValues: []keyValue{
+				{
+					key:   path([]byte{0, 1, 1, 2}),
+					value: testIDs[2],
+				},
+				{
+					key:   path([]byte{0, 1, 1, 2, NodeBranchFactor - 1}),
+					value: testIDs[3],
+				},
+				{
+					key:   path([]byte{0, 2}),
+					value: testIDs[1],
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
