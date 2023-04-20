@@ -68,23 +68,24 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 		iter.nodeToID[i+1] = proof[i].Children[childIndex]
 	}
 
-	// For each node in the proof, find the next child index to visit.
 	var (
-		foundEligibleStartKey    bool
 		smallestEligibleStartKey path
+		foundEligibleStartKey    bool
 		firstNodeIndex           = math.MaxInt
 	)
 
-	for nodeIndex := 0; nodeIndex < len(proof); nodeIndex++ {
+	// For each node in the proof, find the next child index to visit.
+	// Start from the last node in the proof.
+	// Note that all keys in a proof node are after the key of the previous proof node.
+	for nodeIndex := len(proof) - 1; nodeIndex >= 0; nodeIndex-- {
 		node := proof[nodeIndex]
 		nodePath := iter.nodeToPath[nodeIndex]
 
 		if start.Compare(nodePath) <= 0 {
-			// [start] is at/before this node, and therefore all of its descendants.
+			// [start] is at/before this node and all of its children.
 			// All of them should be iterated over.
 			iter.nextChildIndex[nodeIndex] = visitNodeNextKey
 
-			// If this is the smallest eligible start key, set node index.
 			if !foundEligibleStartKey || nodePath.Compare(smallestEligibleStartKey) < 0 {
 				smallestEligibleStartKey = nodePath
 				firstNodeIndex = nodeIndex
@@ -94,8 +95,8 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 			continue
 		}
 
-		// [start] is after this node. Find which children, if any,
-		// we should iterate over.
+		// [start] is after this node's key.
+		// Find which children, if any, we should iterate over.
 		for childIdx := byte(0); childIdx < NodeBranchFactor; childIdx++ {
 			if _, ok := node.Children[childIdx]; !ok {
 				// This child doesn't exist.
@@ -116,40 +117,37 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 				childKey = nodePath.Append(childIdx)
 			}
 
-			if comp := start.Compare(childKey); comp <= 0 {
-				// The child is at/after [start]. We should iterate over it
-				// (and, if it's a node, all its descendants.)
-				if !childIsNode {
-					if !foundEligibleStartKey || childKey.Compare(smallestEligibleStartKey) < 0 {
-						smallestEligibleStartKey = childKey
-						firstNodeIndex = nodeIndex
-						foundEligibleStartKey = true
-					}
-					iter.nextChildIndex[nodeIndex] = int(childIdx)
-				} else {
-					// TODO reduce duplicated code
-					if !foundEligibleStartKey || childKey.Compare(smallestEligibleStartKey) < 0 {
-						smallestEligibleStartKey = childKey
-						firstNodeIndex = nodeIndex + 1
-						foundEligibleStartKey = true
-					}
-					// When we visit [node], we should visit the child
-					// after this one.
-					nextChildIndex := NodeBranchFactor
-					for j := childIdx + 1; j <= NodeBranchFactor; j++ {
-						if _, ok := node.Children[j]; ok {
-							nextChildIndex = int(j)
-							break
-						}
-					}
-					iter.nextChildIndex[nodeIndex] = nextChildIndex
-					iter.nextChildIndex[nodeIndex+1] = visitNodeNextKey
-				}
-				break
+			if start.Compare(childKey) > 0 {
+				// The child is before [start]. Don't iterate over it.
+				iter.nextChildIndex[nodeIndex] = int(childIdx) + 1
+				continue
 			}
-			// We don't need to look at any more children.
-			// The child is before [start]. Don't iterate over it.
-			iter.nextChildIndex[nodeIndex] = int(childIdx) + 1
+
+			// The child is at/after [start]. We should iterate over it
+			// (and, if it's a node, all its descendants.)
+			if !childIsNode {
+				if !foundEligibleStartKey || childKey.Compare(smallestEligibleStartKey) < 0 {
+					smallestEligibleStartKey = childKey
+					firstNodeIndex = nodeIndex
+					foundEligibleStartKey = true
+				}
+				iter.nextChildIndex[nodeIndex] = int(childIdx)
+			} else {
+				// This child is a node in the proof.
+				// When we visit [node], we should visit the child after this one
+				// since we will have already visited this child.
+				nextChildIndex := NodeBranchFactor
+				for j := childIdx + 1; j < NodeBranchFactor; j++ {
+					if _, ok := node.Children[j]; ok {
+						nextChildIndex = int(j)
+						break
+					}
+				}
+				iter.nextChildIndex[nodeIndex] = nextChildIndex
+			}
+			// We found the first child that is at/after [start].
+			// No need to look at the rest of the children.
+			break
 		}
 	}
 	iter.nodeIndex = firstNodeIndex
