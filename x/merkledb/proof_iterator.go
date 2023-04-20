@@ -99,9 +99,11 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 				// The child is before [start]. Don't iterate over it.
 				continue
 			}
+
 			// The child is at/after [start].
 			// Mark it as the next child to visit at this node.
 			iter.nodeToLastVisited[nodeIndex] = int(childIdx) - 1
+
 			if !foundEligibleStartKey || childKey.Compare(smallestEligibleStartKey) < 0 {
 				smallestEligibleStartKey = childKey
 				iter.nextNodeIndex = nodeIndex
@@ -109,12 +111,14 @@ func newProofIterator(proof []ProofNode, start path) *proofIterator {
 			}
 			break
 		}
+
 		if _, ok := iter.nodeToLastVisited[nodeIndex]; !ok {
 			// We didn't find any children that are at/after [start].
 			// Mark this node as exhausted.
 			iter.nodeToLastVisited[nodeIndex] = NodeBranchFactor
 		}
 	}
+
 	if iter.nextNodeIndex == nextNodeIndexNotFoundVal {
 		// All keys are after [start].
 		iter.exhausted = true
@@ -130,26 +134,38 @@ func (i *proofIterator) Next() bool {
 	}
 
 	node := i.proof[i.nextNodeIndex]
-	// Note lastVisited is 0 if we haven't visited this node yet.
-	lastVisited, hasLastVisited := i.nodeToLastVisited[i.nextNodeIndex]
+	// Note lastVisitedIndex is 0 if we haven't visited this node yet.
+	lastVisitedIndex, hasLastVisited := i.nodeToLastVisited[i.nextNodeIndex]
 	if !hasLastVisited {
-		lastVisited = -1
+		// Set to -1 so that when we iterate looking for the next child to visit,
+		// we start at 0.
+		lastVisitedIndex = -1
 	}
 
 	// Find the next child index to visit for this node.
 	// Note the invariant of [nextNodeIndex] ensures that there is at least one
 	// child to visit.
 	var childIdx int
-	for childIdx = lastVisited + 1; childIdx < NodeBranchFactor; childIdx++ {
+	for childIdx = lastVisitedIndex + 1; childIdx < NodeBranchFactor; childIdx++ {
 		if _, ok := node.Children[byte(childIdx)]; ok {
 			break
 		}
 	}
 
 	if i.nextNodeIndex == 0 && !hasLastVisited {
+		// Special case for returning the root's key.
+		// For all other nodes, the parent reports the child's key.
+		// However, the root has no parent so we return its key here.
 		i.key = i.nodeToPath[i.nextNodeIndex]
 		i.value = ids.Empty
+
+		// Set to -1 so that next time [i.nextNodeIndex] is the root,
+		// [hasLastVisited] will be true and we won't enter this block.
 		i.nodeToLastVisited[i.nextNodeIndex] = -1
+
+		// Set to -1 so that below, when we check whether this node
+		// has more children to visit, we start looking for children
+		// at index 0.
 		childIdx = -1
 	} else {
 		i.key = i.nodeToPath[i.nextNodeIndex].Append(byte(childIdx))
