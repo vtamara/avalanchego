@@ -459,7 +459,7 @@ func TestProofIterator(t *testing.T) {
 }
 
 func TestProofIteratorRandom(t *testing.T) {
-	rand := rand.New(rand.NewSource(1337))
+	rand := rand.New(rand.NewSource(1337)) //nolint:gosec
 	require := require.New(t)
 
 	db, err := getBasicDB()
@@ -564,5 +564,4 @@ func TestProofIteratorRandom(t *testing.T) {
 		}
 		require.Equal(len(expectedKeyValues), numIters, "failed on proof %v", proofIndex)
 	}
-
 }

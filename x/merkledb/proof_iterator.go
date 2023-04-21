@@ -217,7 +217,7 @@ func (i *proofIterator) Next() bool {
 		// Check whether there are more children to visit at the parent.
 		parent := i.proof[i.nextNodeIndex]
 		for nextChildIndex := parentLastVisited + 1; nextChildIndex < NodeBranchFactor; nextChildIndex++ {
-			if _, ok := parent.Children[byte(nextChildIndex)]; ok {
+			if _, ok := parent.Children[nextChildIndex]; ok {
 				// There are more children to visit at this node.
 				// [i.nextNodeIndex] is already set to the correct value.
 				return true
