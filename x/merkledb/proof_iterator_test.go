@@ -4,229 +4,27 @@
 package merkledb
 
 import (
+	"bytes"
+	"context"
+	"math/rand"
 	"testing"
 
-	"github.com/ava-labs/avalanchego/ids"
+	"golang.org/x/exp/slices"
+
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/avalanchego/ids"
 )
 
-// TODO expand this test to include other aspects of the function.
-func TestNewProofIterator(t *testing.T) {
-	type test struct {
-		name                 string
-		proof                []ProofNode
-		start                path
-		expectedNodeIndex    int
-		expectedExhausted    bool
-		expectedChildIndices map[int]int
-	}
-
-	tests := []test{
-		{
-			name: "one node; iterate over node and all children",
-			proof: []ProofNode{
-				{
-					KeyPath: SerializedPath{
-						Value: []byte{0},
-					},
-				},
-			},
-			start:                "",
-			expectedNodeIndex:    0,
-			expectedExhausted:    false,
-			expectedChildIndices: map[int]int{},
-		},
-		{
-			name: "one node; iterate over all children but not node",
-			proof: []ProofNode{
-				{
-					KeyPath: path([]byte{0}).Serialize(),
-					Children: map[byte]ids.ID{
-						0: ids.GenerateTestID(),
-					},
-				},
-			},
-			start:                path([]byte{0}),
-			expectedNodeIndex:    0,
-			expectedExhausted:    false,
-			expectedChildIndices: map[int]int{},
-		},
-		{
-			name: "one node; no children; exhausted",
-			proof: []ProofNode{
-				{
-					KeyPath: path([]byte{0}).Serialize(),
-				},
-			},
-			start:                path([]byte{0, 1}),
-			expectedNodeIndex:    0,
-			expectedExhausted:    true,
-			expectedChildIndices: map[int]int{0: 16},
-		},
-		{
-			name: "one node; children; exhausted",
-			proof: []ProofNode{
-				{
-					KeyPath: path([]byte{0}).Serialize(),
-					Children: map[byte]ids.ID{
-						0: ids.GenerateTestID(),
-					},
-				},
-			},
-			start:                path([]byte{0, 1}),
-			expectedNodeIndex:    0,
-			expectedExhausted:    true,
-			expectedChildIndices: map[int]int{0: 16},
-		},
-		{
-			name: "one node; start at first child",
-			proof: []ProofNode{
-				{
-					KeyPath: path([]byte{0}).Serialize(),
-					Children: map[byte]ids.ID{
-						0: ids.GenerateTestID(),
-					},
-				},
-			},
-			start:                path([]byte{0, 0}),
-			expectedNodeIndex:    0,
-			expectedExhausted:    false,
-			expectedChildIndices: map[int]int{0: 0},
-		},
-		{
-			name: "one node; start at second child",
-			proof: []ProofNode{
-				{
-					KeyPath: path([]byte{0}).Serialize(),
-					Children: map[byte]ids.ID{
-						0: ids.GenerateTestID(),
-						1: ids.GenerateTestID(),
-					},
-				},
-			},
-			start:                path([]byte{0, 1}),
-			expectedNodeIndex:    0,
-			expectedExhausted:    false,
-			expectedChildIndices: map[int]int{0: 1},
-		},
-		{
-			name: "two nodes; first with children; start at second node",
-			proof: []ProofNode{
-				{
-					KeyPath: path([]byte{0}).Serialize(),
-					Children: map[byte]ids.ID{
-						0: ids.GenerateTestID(),
-					},
-				},
-				{
-					KeyPath: path([]byte{0, 0}).Serialize(),
-					Children: map[byte]ids.ID{
-						1: ids.GenerateTestID(),
-					},
-				},
-			},
-			start:                path([]byte{0, 0}),
-			expectedNodeIndex:    0,
-			expectedExhausted:    false,
-			expectedChildIndices: map[int]int{0: 0},
-		},
-		{
-			name: "two nodes; start at second node's first child",
-			proof: []ProofNode{
-				{
-					KeyPath: path([]byte{0}).Serialize(),
-					Children: map[byte]ids.ID{
-						0: ids.GenerateTestID(),
-					},
-				},
-				{
-					KeyPath: path([]byte{0, 0}).Serialize(),
-					Children: map[byte]ids.ID{
-						1: ids.GenerateTestID(),
-					},
-				},
-			},
-			start:             path([]byte{0, 0, 1}),
-			expectedNodeIndex: 1,
-			expectedExhausted: false,
-			expectedChildIndices: map[int]int{
-				0: 16,
-				1: 1,
-			},
-		},
-		{
-			name: "two nodes; start at second node's second child",
-			proof: []ProofNode{
-				{
-					KeyPath: path([]byte{0}).Serialize(),
-					Children: map[byte]ids.ID{
-						0: ids.GenerateTestID(),
-					},
-				},
-				{
-					KeyPath: path([]byte{0, 0}).Serialize(),
-					Children: map[byte]ids.ID{
-						1: ids.GenerateTestID(),
-						2: ids.GenerateTestID(),
-					},
-				},
-			},
-			start:             path([]byte{0, 0, 2}),
-			expectedNodeIndex: 1,
-			expectedExhausted: false,
-			expectedChildIndices: map[int]int{
-				0: 16,
-				1: 2,
-			},
-		},
-		{
-			name: "two nodes; exhausted",
-			proof: []ProofNode{
-				{
-					KeyPath: path([]byte{0}).Serialize(),
-					Children: map[byte]ids.ID{
-						0: ids.GenerateTestID(),
-					},
-				},
-				{
-					KeyPath: path([]byte{0, 0}).Serialize(),
-					Children: map[byte]ids.ID{
-						1: ids.GenerateTestID(),
-						2: ids.GenerateTestID(),
-					},
-				},
-			},
-			start:             path([]byte{0, 0, 3}),
-			expectedNodeIndex: 1,
-			expectedExhausted: true,
-			expectedChildIndices: map[int]int{
-				0: 16,
-				1: 16,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require := require.New(t)
-
-			iter := NewProofIterator(tt.proof, tt.start)
-			require.Equal(tt.expectedNodeIndex, iter.nextNodeIndex)
-			require.Equal(tt.expectedExhausted, iter.exhausted)
-			require.Equal(tt.expectedChildIndices, iter.nodeToLastVisited)
-		})
-	}
+type keyValue struct {
+	key   path
+	value ids.ID
 }
 
 func TestProofIterator(t *testing.T) {
 	testIDs := []ids.ID{}
 	for i := 0; i < 10; i++ {
 		testIDs = append(testIDs, ids.GenerateTestID())
-	}
-
-	type keyValue struct {
-		key   path
-		value ids.ID
 	}
 
 	type test struct {
@@ -658,4 +456,113 @@ func TestProofIterator(t *testing.T) {
 			require.Equal(len(tt.expectedKeyValues), i)
 		})
 	}
+}
+
+func TestProofIteratorRandom(t *testing.T) {
+	rand := rand.New(rand.NewSource(1337))
+	require := require.New(t)
+
+	db, err := getBasicDB()
+	require.NoError(err)
+
+	var (
+		numProofsToTest  = 1_000
+		numKeyValues     = 1_000
+		maxKeyLen        = 256
+		maxValLen        = 256
+		maxRangeStartLen = 8
+		maxRangeEndLen   = 8
+		maxIterStartLen  = 8
+		maxProofLen      = 128
+	)
+
+	// Put random keys into the database
+	for i := 0; i < numKeyValues; i++ {
+		key := make([]byte, rand.Intn(maxKeyLen))
+		_, _ = rand.Read(key)
+		val := make([]byte, rand.Intn(maxValLen))
+		err := db.Put(key, val)
+		require.NoError(err)
+	}
+
+	for proofIndex := 0; proofIndex < numProofsToTest; proofIndex++ {
+		// Generate a proof for a random key
+		var (
+			rangeStart []byte
+			rangeEnd   []byte
+		)
+		for rangeStart == nil || bytes.Compare(rangeStart, rangeEnd) == 1 {
+			rangeStart = make([]byte, rand.Intn(maxRangeStartLen)+1)
+			_, _ = rand.Read(rangeStart)
+			rangeEnd = make([]byte, rand.Intn(maxRangeEndLen)+1)
+			_, _ = rand.Read(rangeEnd)
+		}
+
+		proof, err := db.GetRangeProof(
+			context.Background(),
+			rangeStart,
+			rangeEnd,
+			rand.Intn(maxProofLen)+1,
+		)
+		require.NoError(err)
+
+		if len(proof.StartProof) == 0 {
+			// Skip since there's no proof to use.
+			// This will probbably never happen.
+			continue
+		}
+
+		// Generate iteration start
+		iterStartBytes := make([]byte, rand.Intn(maxIterStartLen)+1)
+		_, _ = rand.Read(iterStartBytes)
+		iterStartPath := path(iterStartBytes)
+
+		// Generate expected result
+		expectedKeyValues := []keyValue{}
+		for i, node := range proof.StartProof {
+			if i == 0 {
+				// Special case the root
+				expectedKeyValues = append(expectedKeyValues, keyValue{
+					key:   node.KeyPath.deserialize(),
+					value: ids.Empty,
+				})
+			}
+			for childIdx, childID := range node.Children {
+				expectedKeyValues = append(expectedKeyValues, keyValue{
+					key:   node.KeyPath.deserialize().Append(childIdx),
+					value: childID,
+				})
+			}
+		}
+
+		// Sort expected key values to (hopefully) match iterator
+		slices.SortStableFunc(expectedKeyValues, func(kv1, kv2 keyValue) bool {
+			return kv1.key.Compare(kv2.key) < 0
+		})
+
+		// Remove all keys that are less than startPath
+		firstValidIdx := len(expectedKeyValues)
+		for j, kv := range expectedKeyValues {
+			if kv.key.Compare(iterStartPath) >= 0 {
+				firstValidIdx = j
+				break
+			}
+		}
+		expectedKeyValues = expectedKeyValues[firstValidIdx:]
+
+		iter := NewProofIterator(proof.StartProof, iterStartPath)
+		numIters := 0
+		for iter.Next() {
+			require.Less(numIters, len(expectedKeyValues), "too many iterations")
+
+			gotKey := iter.Key()
+			require.Equal(expectedKeyValues[numIters].key, gotKey, "failed on proof %v iteration %v", proofIndex, numIters)
+
+			gotValue := iter.Value()
+			require.Equal(expectedKeyValues[numIters].value, gotValue, "failed on proof %v iteration %v", proofIndex, numIters)
+			numIters++
+		}
+		require.Equal(len(expectedKeyValues), numIters, "failed on proof %v", proofIndex)
+	}
+
 }
