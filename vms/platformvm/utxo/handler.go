@@ -80,6 +80,16 @@ type Spender interface {
 		[]*secp256k1.PrivateKey, // Keys that prove ownership
 		error,
 	)
+
+	AuthorizeStakingExtension(
+		state state.Chain,
+		validatorTxID ids.ID,
+		keys []*secp256k1.PrivateKey,
+	) (
+		verify.Verifiable, // Input that names owners
+		[]*secp256k1.PrivateKey, // Keys that prove ownership
+		error,
+	)
 }
 
 type Verifier interface {
@@ -416,6 +426,49 @@ func (h *handler) Authorize(
 	owner, ok := subnet.Owner.(*secp256k1fx.OutputOwners)
 	if !ok {
 		return nil, nil, fmt.Errorf("expected *secp256k1fx.OutputOwners but got %T", subnet.Owner)
+	}
+
+	// Add the keys to a keychain
+	kc := secp256k1fx.NewKeychain(keys...)
+
+	// Make sure that the operation is valid after a minimum time
+	now := uint64(h.clk.Time().Unix())
+
+	// Attempt to prove ownership of the subnet
+	indices, signers, matches := kc.Match(owner, now)
+	if !matches {
+		return nil, nil, errCantSign
+	}
+
+	return &secp256k1fx.Input{SigIndices: indices}, signers, nil
+}
+
+func (h *handler) AuthorizeStakingExtension(
+	state state.Chain,
+	validatorTxID ids.ID,
+	keys []*secp256k1.PrivateKey,
+) (
+	verify.Verifiable, // Input that names owners
+	[]*secp256k1.PrivateKey, // Keys that prove ownership
+	error,
+) {
+	valTx, _, err := state.GetTx(validatorTxID)
+	if err != nil {
+		return nil, nil, fmt.Errorf(
+			"failed to fetch validatorTx %s: %w",
+			validatorTxID,
+			err,
+		)
+	}
+	val, ok := valTx.Unsigned.(txs.ValidatorTx)
+	if !ok {
+		return nil, nil, fmt.Errorf("expected tx type txs.ValidatorTx but got %T", valTx.Unsigned)
+	}
+
+	// Make sure the owners of the validator reward address match the provided keys
+	owner, ok := val.ValidationRewardsOwner().(*secp256k1fx.OutputOwners)
+	if !ok {
+		return nil, nil, fmt.Errorf("expected *secp256k1fx.OutputOwners but got %T", val.ValidationRewardsOwner())
 	}
 
 	// Add the keys to a keychain

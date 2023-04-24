@@ -145,6 +145,21 @@ func (mr *MockBuilderMockRecorder) NewExportTx(arg0, arg1, arg2, arg3, arg4 inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewExportTx", reflect.TypeOf((*MockBuilder)(nil).NewExportTx), arg0, arg1, arg2, arg3, arg4)
 }
 
+// NewExtendPermissionlessValidatorStakingTx mocks base method.
+func (m *MockBuilder) NewExtendPermissionlessValidatorStakingTx(arg0 ids.NodeID, arg1, arg2 ids.ID, arg3 []*secp256k1.PrivateKey, arg4 ids.ShortID) (*txs.Tx, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewExtendPermissionlessValidatorStakingTx", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(*txs.Tx)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NewExtendPermissionlessValidatorStakingTx indicates an expected call of NewExtendPermissionlessValidatorStakingTx.
+func (mr *MockBuilderMockRecorder) NewExtendPermissionlessValidatorStakingTx(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewExtendPermissionlessValidatorStakingTx", reflect.TypeOf((*MockBuilder)(nil).NewExtendPermissionlessValidatorStakingTx), arg0, arg1, arg2, arg3, arg4)
+}
+
 // NewImportTx mocks base method.
 func (m *MockBuilder) NewImportTx(arg0 ids.ID, arg1 ids.ShortID, arg2 []*secp256k1.PrivateKey, arg3 ids.ShortID) (*txs.Tx, error) {
 	m.ctrl.T.Helper()

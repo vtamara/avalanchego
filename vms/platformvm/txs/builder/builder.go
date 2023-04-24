@@ -92,6 +92,18 @@ type DecisionTxBuilder interface {
 		keys []*secp256k1.PrivateKey,
 		changeAddr ids.ShortID,
 	) (*txs.Tx, error)
+
+	// Creates a transaction that extend a permissionless
+	// validator staking time
+	// keys: keys to use for removing the validator
+	// changeAddr: address to send change to, if there is any
+	NewExtendPermissionlessValidatorStakingTx(
+		nodeID ids.NodeID,
+		subnetID ids.ID,
+		validatorTxID ids.ID,
+		keys []*secp256k1.PrivateKey,
+		changeAddr ids.ShortID,
+	) (*txs.Tx, error)
 }
 
 type ProposalTxBuilder interface {
@@ -607,5 +619,42 @@ func (b *builder) NewRewardValidatorTx(txID ids.ID) (*txs.Tx, error) {
 		return nil, err
 	}
 
+	return tx, tx.SyntacticVerify(b.ctx)
+}
+
+func (b *builder) NewExtendPermissionlessValidatorStakingTx(
+	nodeID ids.NodeID,
+	subnetID ids.ID,
+	validatorTxID ids.ID,
+	keys []*secp256k1.PrivateKey,
+	changeAddr ids.ShortID,
+) (*txs.Tx, error) {
+	ins, outs, _, signers, err := b.Spend(b.state, keys, 0, b.cfg.TxFee, changeAddr)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't generate tx inputs/outputs: %w", err)
+	}
+
+	subnetAuth, subnetSigners, err := b.AuthorizeStakingExtension(b.state, validatorTxID, keys)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't authorize tx's subnet restrictions: %w", err)
+	}
+	signers = append(signers, subnetSigners)
+
+	// Create the tx
+	utx := &txs.ExtendPermissionlessValidatorStakingTx{
+		BaseTx: txs.BaseTx{BaseTx: avax.BaseTx{
+			NetworkID:    b.ctx.NetworkID,
+			BlockchainID: b.ctx.ChainID,
+			Ins:          ins,
+			Outs:         outs,
+		}},
+		Subnet:     subnetID,
+		NodeID:     nodeID,
+		StakerAuth: subnetAuth,
+	}
+	tx, err := txs.NewSigned(utx, txs.Codec, signers)
+	if err != nil {
+		return nil, err
+	}
 	return tx, tx.SyntacticVerify(b.ctx)
 }
