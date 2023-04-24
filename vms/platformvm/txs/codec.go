@@ -91,6 +91,9 @@ func RegisterUnsignedTxsTypes(targetCodec codec.Registry) error {
 
 		targetCodec.RegisterType(&signer.Empty{}),
 		targetCodec.RegisterType(&signer.ProofOfPossession{}),
+
+		// Continuous Staking additions:
+		targetCodec.RegisterType(&ExtendPermissionlessValidatorStakingTx{}),
 	)
 	return errs.Err
 }

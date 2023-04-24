@@ -72,6 +72,10 @@ func (*AtomicTxExecutor) AddPermissionlessDelegatorTx(*txs.AddPermissionlessDele
 	return ErrWrongTxType
 }
 
+func (*AtomicTxExecutor) ExtendPermissionlessValidatorStakingTx(*txs.ExtendPermissionlessValidatorStakingTx) error {
+	return ErrWrongTxType
+}
+
 func (e *AtomicTxExecutor) ImportTx(tx *txs.ImportTx) error {
 	return e.atomicTx(tx)
 }

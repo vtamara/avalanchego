@@ -20,25 +20,28 @@ import (
 )
 
 var (
-	ErrWeightTooSmall                  = errors.New("weight of this validator is too low")
-	ErrWeightTooLarge                  = errors.New("weight of this validator is too large")
-	ErrInsufficientDelegationFee       = errors.New("staker charges an insufficient delegation fee")
-	ErrStakeTooShort                   = errors.New("staking period is too short")
-	ErrStakeTooLong                    = errors.New("staking period is too long")
-	ErrFlowCheckFailed                 = errors.New("flow check failed")
-	ErrFutureStakeTime                 = fmt.Errorf("staker is attempting to start staking more than %s ahead of the current chain time", MaxFutureStartTime)
-	ErrValidatorSubset                 = errors.New("all subnets' staking period must be a subset of the primary network")
-	ErrNotValidator                    = errors.New("isn't a current or pending validator")
-	ErrRemovePermissionlessValidator   = errors.New("attempting to remove permissionless validator")
-	ErrStakeOverflow                   = errors.New("validator stake exceeds limit")
-	ErrOverDelegated                   = errors.New("validator would be over delegated")
-	ErrIsNotTransformSubnetTx          = errors.New("is not a transform subnet tx")
-	ErrTimestampNotBeforeStartTime     = errors.New("chain timestamp not before start time")
-	ErrStartTimeMustBeZero             = errors.New("staker start time must be zero")
-	ErrAlreadyValidator                = errors.New("already a validator")
-	ErrDuplicateValidator              = errors.New("duplicate validator")
-	ErrDelegateToPermissionedValidator = errors.New("delegation to permissioned validator")
-	ErrWrongStakedAssetID              = errors.New("incorrect staked assetID")
+	ErrWeightTooSmall                    = errors.New("weight of this validator is too low")
+	ErrWeightTooLarge                    = errors.New("weight of this validator is too large")
+	ErrInsufficientDelegationFee         = errors.New("staker charges an insufficient delegation fee")
+	ErrStakeTooShort                     = errors.New("staking period is too short")
+	ErrStakeTooLong                      = errors.New("staking period is too long")
+	ErrFlowCheckFailed                   = errors.New("flow check failed")
+	ErrFutureStakeTime                   = fmt.Errorf("staker is attempting to start staking more than %s ahead of the current chain time", MaxFutureStartTime)
+	ErrValidatorSubset                   = errors.New("all subnets' staking period must be a subset of the primary network")
+	ErrNotValidator                      = errors.New("isn't a current or pending validator")
+	ErrRemovePermissionlessValidator     = errors.New("attempting to remove permissionless validator")
+	ErrStakeOverflow                     = errors.New("validator stake exceeds limit")
+	ErrOverDelegated                     = errors.New("validator would be over delegated")
+	ErrIsNotTransformSubnetTx            = errors.New("is not a transform subnet tx")
+	ErrTimestampNotBeforeStartTime       = errors.New("chain timestamp not before start time")
+	ErrStartTimeMustBeZero               = errors.New("staker start time must be zero")
+	ErrAlreadyValidator                  = errors.New("already a validator")
+	ErrDuplicateValidator                = errors.New("duplicate validator")
+	ErrDelegateToPermissionedValidator   = errors.New("delegation to permissioned validator")
+	ErrWrongStakedAssetID                = errors.New("incorrect staked assetID")
+	ErrTxNotAllowedInCurrentFork         = errors.New("transaction not allowed in current fork")
+	ErrCannotExtendPermissionedValidator = errors.New("forbid extending permissioned validator")
+	ErrUnauthorizedStakingExtension      = errors.New("unauthorized staking extension")
 )
 
 // verifyAddValidatorTx carries out the validation for an AddValidatorTx.
@@ -874,4 +877,89 @@ func getDelegatorRules(
 		maxStakeDuration:         time.Duration(transformSubnet.MaxStakeDuration) * time.Second,
 		maxValidatorWeightFactor: transformSubnet.MaxValidatorWeightFactor,
 	}, nil
+}
+
+func verifyExtendPermissionlessValidatorTx(
+	backend *Backend,
+	chainState state.Chain,
+	sTx *txs.Tx,
+	tx *txs.ExtendPermissionlessValidatorStakingTx,
+) (*state.Staker, error) {
+	// Verify the tx is well-formed
+	if err := tx.SyntacticVerify(backend.Ctx); err != nil {
+		return nil, err
+	}
+
+	var (
+		txID      = sTx.ID()
+		chainTime = chainState.GetTimestamp()
+	)
+
+	if !backend.Config.IsContinuousStakingActivated(chainTime) {
+		return nil, fmt.Errorf("%w, extend staking tx %s not allowed before Continuous staking fork is active", ErrTxNotAllowedInCurrentFork, txID)
+	}
+
+	validator, err := chainState.GetCurrentValidator(tx.Subnet, tx.NodeID)
+	if err != nil {
+		return nil, fmt.Errorf("could not find validator to extend subnetID %s, nodeID %s, err %w",
+			tx.Subnet,
+			tx.NodeID,
+			err,
+		)
+	}
+
+	if !backend.Bootstrapped.Get() {
+		// skip "heavy" validations while bootstrapping.
+		// Just return validator to update state properly
+		return validator, nil
+	}
+
+	if validator.Priority.IsPermissionedValidator() {
+		return nil, fmt.Errorf("%w, subnetID %s, nodeID %s",
+			ErrCannotExtendPermissionedValidator,
+			tx.Subnet,
+			tx.NodeID,
+		)
+	}
+
+	if len(sTx.Creds) == 0 {
+		// Ensure there is at least one credential for the subnet authorization
+		return nil, errWrongNumberOfCredentials
+	}
+	baseTxCredsLen := len(sTx.Creds) - 1
+	extendingCred := sTx.Creds[baseTxCredsLen]
+	vdrTx, _, err := chainState.GetTx(validator.TxID)
+	if err != nil {
+		return nil, fmt.Errorf("could not retrieve permissionless validator tx: %v, err %w",
+			txID,
+			err,
+		)
+	}
+	vTx, ok := vdrTx.Unsigned.(txs.ValidatorTx)
+	if !ok {
+		return nil, errors.New("unexpected tx type")
+	}
+
+	if err := backend.Fx.VerifyPermission(
+		sTx,
+		tx.StakerAuth,
+		extendingCred,
+		vTx.ValidationRewardsOwner(),
+	); err != nil {
+		return nil, fmt.Errorf("%w, err: %v", ErrUnauthorizedStakingExtension, err)
+	}
+
+	if err := backend.FlowChecker.VerifySpend(
+		tx,
+		chainState,
+		tx.Ins,
+		tx.Outs,
+		sTx.Creds[:baseTxCredsLen],
+		map[ids.ID]uint64{
+			backend.Ctx.AVAXAssetID: backend.Config.ExtendPermissionlessValidatorFee,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return validator, nil
 }

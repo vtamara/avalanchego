@@ -74,6 +74,10 @@ func (v *MempoolTxVerifier) AddPermissionlessDelegatorTx(tx *txs.AddPermissionle
 	return v.standardTx(tx)
 }
 
+func (v *MempoolTxVerifier) ExtendPermissionlessValidatorStakingTx(tx *txs.ExtendPermissionlessValidatorStakingTx) error {
+	return v.standardTx(tx)
+}
+
 func (v *MempoolTxVerifier) standardTx(tx txs.UnsignedTx) error {
 	baseState, err := v.standardBaseState()
 	if err != nil {

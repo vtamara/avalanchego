@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
@@ -499,6 +500,29 @@ func (e *StandardTxExecutor) AddPermissionlessDelegatorTx(tx *txs.AddPermissionl
 	avax.Produce(e.State, txID, tx.Outs)
 
 	return nil
+}
+
+func (e *StandardTxExecutor) ExtendPermissionlessValidatorStakingTx(tx *txs.ExtendPermissionlessValidatorStakingTx) error {
+	vdr, err := verifyExtendPermissionlessValidatorTx(
+		e.Backend,
+		e.State,
+		e.Tx,
+		tx,
+	)
+	if err != nil {
+		return err
+	}
+
+	txID := e.Tx.ID()
+
+	// Consume the UTXOS
+	avax.Consume(e.State, tx.Ins)
+	// Produce the UTXOS
+	avax.Produce(e.State, txID, tx.Outs)
+
+	extendedValidator := *vdr
+	extendedValidator.EndTime = mockable.MaxTime
+	return e.State.UpdateCurrentValidator(&extendedValidator)
 }
 
 func (e *StandardTxExecutor) addStakerFromStakerTx(

@@ -4,6 +4,8 @@
 package executor
 
 import (
+	"math"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -20,7 +22,9 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/ava-labs/avalanchego/vms/platformvm/config"
+	"github.com/ava-labs/avalanchego/vms/platformvm/fx"
 	"github.com/ava-labs/avalanchego/vms/platformvm/state"
+	"github.com/ava-labs/avalanchego/vms/platformvm/status"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
 	"github.com/ava-labs/avalanchego/vms/platformvm/utxo"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
@@ -743,6 +747,375 @@ func TestGetDelegatorRules(t *testing.T) {
 			}
 			require.NoError(err)
 			require.Equal(tt.expectedRules, rules)
+		})
+	}
+}
+
+func TestVerifyExtendPermissionlessValidatorTx(t *testing.T) {
+	type test struct {
+		name        string
+		backendF    func(*gomock.Controller) *Backend
+		stateF      func(*gomock.Controller) state.Chain
+		sTxF        func() *txs.Tx
+		txF         func() *txs.ExtendPermissionlessValidatorStakingTx
+		expectedErr error
+	}
+
+	var (
+		continuousStakingFork = time.Now()
+		rndStartTime          = time.Unix(rand.Int63(), 0)                     // #nosec G404
+		rndStakingPeriod      = time.Duration(math.Abs(float64(rand.Int63()))) // #nosec G404
+		rndNextTime           = rndStartTime.Add(rndStakingPeriod)
+		validatorToExtend     = &state.Staker{
+			TxID:          ids.GenerateTestID(),
+			NodeID:        ids.GenerateTestNodeID(),
+			SubnetID:      ids.GenerateTestID(),
+			StartTime:     rndStartTime,
+			StakingPeriod: rndStakingPeriod,
+			EndTime:       rndNextTime,
+			NextTime:      rndNextTime,
+			Priority:      txs.SubnetPermissionlessValidatorCurrentPriority,
+		}
+
+		// This tx already passed syntactic verification.
+		verifiedTx = txs.ExtendPermissionlessValidatorStakingTx{
+			BaseTx: txs.BaseTx{
+				SyntacticallyVerified: true,
+				BaseTx: avax.BaseTx{
+					NetworkID:    1,
+					BlockchainID: ids.GenerateTestID(),
+					Outs:         []*avax.TransferableOutput{},
+					Ins:          []*avax.TransferableInput{},
+				},
+			},
+			NodeID:     validatorToExtend.NodeID,
+			Subnet:     validatorToExtend.SubnetID,
+			StakerAuth: nil,
+		}
+		verifiedSignedTx = txs.Tx{
+			Unsigned: &verifiedTx,
+			Creds: []verify.Verifiable{
+				&secp256k1fx.Credential{
+					Sigs: make([][65]byte, 1),
+				},
+				&secp256k1fx.Credential{
+					Sigs: make([][65]byte, 1),
+				},
+			},
+		}
+	)
+	verifiedSignedTx.SetBytes([]byte{1}, []byte{2})
+
+	tests := []test{
+		{
+			name: "fail syntactic verification",
+			backendF: func(*gomock.Controller) *Backend {
+				return &Backend{
+					Ctx: snow.DefaultContextTest(),
+					Config: &config.Config{
+						ContinuousStakingTime:            continuousStakingFork,
+						ExtendPermissionlessValidatorFee: 10,
+					},
+				}
+			},
+			stateF: func(*gomock.Controller) state.Chain {
+				return nil
+			},
+			sTxF: func() *txs.Tx {
+				return nil
+			},
+			txF: func() *txs.ExtendPermissionlessValidatorStakingTx {
+				return nil
+			},
+			expectedErr: txs.ErrNilTx,
+		},
+		{
+			name: "pre continuous staking fork",
+			backendF: func(*gomock.Controller) *Backend {
+				return &Backend{
+					Ctx: snow.DefaultContextTest(),
+					Config: &config.Config{
+						ContinuousStakingTime:            continuousStakingFork,
+						ExtendPermissionlessValidatorFee: 10,
+					},
+					Bootstrapped: &utils.Atomic[bool]{},
+				}
+			},
+			stateF: func(ctrl *gomock.Controller) state.Chain {
+				mockState := state.NewMockChain(ctrl)
+				mockState.EXPECT().GetTimestamp().Return(continuousStakingFork.Add(-1 * time.Second))
+				return mockState
+			},
+			sTxF: func() *txs.Tx {
+				return &verifiedSignedTx
+			},
+			txF: func() *txs.ExtendPermissionlessValidatorStakingTx {
+				tx := verifiedTx // Note that this copies [verifiedTx]
+				return &tx
+			},
+			expectedErr: ErrTxNotAllowedInCurrentFork,
+		},
+		{
+			name: "missing validator to extend",
+			backendF: func(*gomock.Controller) *Backend {
+				return &Backend{
+					Ctx: snow.DefaultContextTest(),
+					Config: &config.Config{
+						ContinuousStakingTime:            continuousStakingFork,
+						ExtendPermissionlessValidatorFee: 10,
+					},
+					Bootstrapped: &utils.Atomic[bool]{},
+				}
+			},
+			stateF: func(ctrl *gomock.Controller) state.Chain {
+				mockState := state.NewMockChain(ctrl)
+				mockState.EXPECT().GetTimestamp().Return(continuousStakingFork)
+				mockState.EXPECT().GetCurrentValidator(validatorToExtend.SubnetID, validatorToExtend.NodeID).
+					Return(nil, database.ErrNotFound)
+				return mockState
+			},
+			sTxF: func() *txs.Tx {
+				return &verifiedSignedTx
+			},
+			txF: func() *txs.ExtendPermissionlessValidatorStakingTx {
+				tx := verifiedTx // Note that this copies [verifiedTx]
+				return &tx
+			},
+			expectedErr: database.ErrNotFound,
+		},
+		{
+			name: "not bootstrapped",
+			backendF: func(*gomock.Controller) *Backend {
+				return &Backend{
+					Ctx: snow.DefaultContextTest(),
+					Config: &config.Config{
+						ContinuousStakingTime:            continuousStakingFork,
+						ExtendPermissionlessValidatorFee: 10,
+					},
+					Bootstrapped: &utils.Atomic[bool]{},
+				}
+			},
+			stateF: func(ctrl *gomock.Controller) state.Chain {
+				mockState := state.NewMockChain(ctrl)
+				mockState.EXPECT().GetTimestamp().Return(continuousStakingFork)
+				mockState.EXPECT().GetCurrentValidator(validatorToExtend.SubnetID, validatorToExtend.NodeID).
+					Return(validatorToExtend, nil)
+				return mockState
+			},
+			sTxF: func() *txs.Tx {
+				return &verifiedSignedTx
+			},
+			txF: func() *txs.ExtendPermissionlessValidatorStakingTx {
+				tx := verifiedTx // Note that this copies [verifiedTx]
+				return &tx
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "forbid extending permissioned validators",
+			backendF: func(*gomock.Controller) *Backend {
+				bootstrapped := &utils.Atomic[bool]{}
+				bootstrapped.Set(true)
+				return &Backend{
+					Ctx: snow.DefaultContextTest(),
+					Config: &config.Config{
+						ContinuousStakingTime: continuousStakingFork,
+					},
+					Bootstrapped: bootstrapped,
+				}
+			},
+			stateF: func(ctrl *gomock.Controller) state.Chain {
+				permissionedVal := *validatorToExtend
+				permissionedVal.Priority = txs.SubnetPermissionedValidatorCurrentPriority
+
+				mockState := state.NewMockChain(ctrl)
+				mockState.EXPECT().GetTimestamp().Return(continuousStakingFork)
+				mockState.EXPECT().GetCurrentValidator(validatorToExtend.SubnetID, validatorToExtend.NodeID).
+					Return(&permissionedVal, nil)
+				return mockState
+			},
+			sTxF: func() *txs.Tx {
+				return &verifiedSignedTx
+			},
+			txF: func() *txs.ExtendPermissionlessValidatorStakingTx {
+				tx := verifiedTx // Note that this copies [verifiedTx]
+				return &tx
+			},
+			expectedErr: ErrCannotExtendPermissionedValidator,
+		},
+		{
+			name: "missing credentials",
+			backendF: func(ctrl *gomock.Controller) *Backend {
+				bootstrapped := &utils.Atomic[bool]{}
+				bootstrapped.Set(true)
+				return &Backend{
+					Config: &config.Config{
+						ContinuousStakingTime:            continuousStakingFork,
+						ExtendPermissionlessValidatorFee: 10,
+					},
+					Ctx:          snow.DefaultContextTest(),
+					Bootstrapped: bootstrapped,
+				}
+			},
+			stateF: func(ctrl *gomock.Controller) state.Chain {
+				mockState := state.NewMockChain(ctrl)
+				mockState.EXPECT().GetTimestamp().Return(continuousStakingFork)
+				mockState.EXPECT().GetCurrentValidator(
+					validatorToExtend.SubnetID,
+					validatorToExtend.NodeID,
+				).Return(validatorToExtend, nil)
+				return mockState
+			},
+			sTxF: func() *txs.Tx {
+				res := verifiedSignedTx
+				res.Creds = nil
+				return &res
+			},
+			txF: func() *txs.ExtendPermissionlessValidatorStakingTx {
+				tx := verifiedTx // Note that this copies [verifiedTx]
+				return &tx
+			},
+			expectedErr: errWrongNumberOfCredentials,
+		},
+		{
+			name: "missing permission to extend staking",
+			backendF: func(ctrl *gomock.Controller) *Backend {
+				bootstrapped := &utils.Atomic[bool]{}
+				bootstrapped.Set(true)
+
+				fx := fx.NewMockFx(ctrl)
+				fx.EXPECT().VerifyPermission(
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+				).Return(ErrUnauthorizedStakingExtension)
+
+				return &Backend{
+					Config: &config.Config{
+						ContinuousStakingTime:            continuousStakingFork,
+						ExtendPermissionlessValidatorFee: 10,
+					},
+					Ctx:          snow.DefaultContextTest(),
+					Fx:           fx,
+					Bootstrapped: bootstrapped,
+				}
+			},
+			stateF: func(ctrl *gomock.Controller) state.Chain {
+				mockState := state.NewMockChain(ctrl)
+				mockState.EXPECT().GetTimestamp().Return(continuousStakingFork)
+				mockState.EXPECT().GetCurrentValidator(
+					validatorToExtend.SubnetID,
+					validatorToExtend.NodeID,
+				).Return(validatorToExtend, nil)
+
+				addValTx := &txs.AddPermissionlessValidatorTx{
+					Validator: txs.Validator{
+						NodeID: validatorToExtend.NodeID,
+						Start:  uint64(validatorToExtend.StartTime.Unix()),
+						End:    uint64(validatorToExtend.EndTime.Unix()),
+						Wght:   validatorToExtend.Weight,
+					},
+					Subnet: validatorToExtend.SubnetID,
+				}
+				signedAddValTx := txs.Tx{
+					Unsigned: addValTx,
+					Creds:    []verify.Verifiable{},
+				}
+				signedAddValTx.SetBytes([]byte{1}, []byte{2})
+
+				mockState.EXPECT().GetTx(validatorToExtend.TxID).Return(&signedAddValTx, status.Committed, nil)
+				return mockState
+			},
+			sTxF: func() *txs.Tx {
+				return &verifiedSignedTx
+			},
+			txF: func() *txs.ExtendPermissionlessValidatorStakingTx {
+				tx := verifiedTx // Note that this copies [verifiedTx]
+				return &tx
+			},
+			expectedErr: ErrUnauthorizedStakingExtension,
+		},
+		{
+			name: "success",
+			backendF: func(ctrl *gomock.Controller) *Backend {
+				bootstrapped := &utils.Atomic[bool]{}
+				bootstrapped.Set(true)
+
+				flowChecker := utxo.NewMockVerifier(ctrl)
+				flowChecker.EXPECT().VerifySpend(
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+				).Return(nil)
+
+				fx := fx.NewMockFx(ctrl)
+				fx.EXPECT().VerifyPermission(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
+				return &Backend{
+					FlowChecker: flowChecker,
+					Config: &config.Config{
+						ContinuousStakingTime:            continuousStakingFork,
+						ExtendPermissionlessValidatorFee: 10,
+					},
+					Ctx:          snow.DefaultContextTest(),
+					Fx:           fx,
+					Bootstrapped: bootstrapped,
+				}
+			},
+			stateF: func(ctrl *gomock.Controller) state.Chain {
+				mockState := state.NewMockChain(ctrl)
+				mockState.EXPECT().GetTimestamp().Return(continuousStakingFork)
+				mockState.EXPECT().GetCurrentValidator(
+					validatorToExtend.SubnetID,
+					validatorToExtend.NodeID,
+				).Return(validatorToExtend, nil)
+
+				addValTx := &txs.AddPermissionlessValidatorTx{
+					Validator: txs.Validator{
+						NodeID: validatorToExtend.NodeID,
+						Start:  uint64(validatorToExtend.StartTime.Unix()),
+						End:    uint64(validatorToExtend.EndTime.Unix()),
+						Wght:   validatorToExtend.Weight,
+					},
+					Subnet: validatorToExtend.SubnetID,
+				}
+				signedAddValTx := txs.Tx{
+					Unsigned: addValTx,
+					Creds:    []verify.Verifiable{},
+				}
+				signedAddValTx.SetBytes([]byte{1}, []byte{2})
+
+				mockState.EXPECT().GetTx(validatorToExtend.TxID).Return(&signedAddValTx, status.Committed, nil)
+				return mockState
+			},
+			sTxF: func() *txs.Tx {
+				return &verifiedSignedTx
+			},
+			txF: func() *txs.ExtendPermissionlessValidatorStakingTx {
+				tx := verifiedTx // Note that this copies [verifiedTx]
+				return &tx
+			},
+			expectedErr: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			var (
+				backend = tt.backendF(ctrl)
+				state   = tt.stateF(ctrl)
+				sTx     = tt.sTxF()
+				tx      = tt.txF()
+			)
+
+			_, err := verifyExtendPermissionlessValidatorTx(backend, state, sTx, tx)
+			require.ErrorIs(t, err, tt.expectedErr)
 		})
 	}
 }

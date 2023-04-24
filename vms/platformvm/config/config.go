@@ -65,6 +65,9 @@ type Config struct {
 	// Transaction fee for adding a subnet delegator
 	AddSubnetDelegatorFee uint64
 
+	// Transaction fee to enable restaking of permissionless validators
+	ExtendPermissionlessValidatorFee uint64
+
 	// The minimum amount of tokens one must bond to be a validator
 	MinValidatorStake uint64
 
