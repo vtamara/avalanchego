@@ -94,7 +94,7 @@ func TestEVMGossip(t *testing.T) {
 	configBytes, err := json.Marshal(config)
 	r.NoError(err)
 
-	n := 1000
+	n := 500
 	s, err := New(context.TODO(), testVMFactory, n, nodeConfig, senderConfig, genesisBytes, configBytes)
 	r.NoError(err)
 	s.Start()

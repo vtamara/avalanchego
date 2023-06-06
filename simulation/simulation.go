@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/version"
 	"github.com/ava-labs/avalanchego/vms"
 )
 
@@ -57,6 +58,14 @@ func (s Simulation) Start() {
 	for _, node := range s.nodes {
 		go node.readMessages()
 	}
+	for _, node := range s.nodes {
+		for _, peer := range s.nodes {
+			if err := node.vm.Connected(context.TODO(), peer.nodeID, version.MinimumCompatibleVersion); err != nil {
+				panic(err)
+			}
+		}
+	}
+
 	for _, node := range s.nodes {
 		node.startVM()
 	}
