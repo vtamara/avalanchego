@@ -63,6 +63,8 @@ github.com/ava-labs/avalanche-network-runner-sdk v0.3.0 h1:TVi9JEdKNU/RevYZ9PyW4
 github.com/ava-labs/avalanche-network-runner-sdk v0.3.0/go.mod h1:SgKJvtqvgo/Bl/c8fxEHCLaSxEbzimYfBopcfrajxQk=
 github.com/ava-labs/coreth v0.12.3-0.20230615014415-2d73342153f4 h1:Ak3ZS+mI4RjYfwgaPfPsJslJM3tRW6ctvIsByfa0c5o=
 github.com/ava-labs/coreth v0.12.3-0.20230615014415-2d73342153f4/go.mod h1:ER02R05Uy2CBKdswaCFl4T92vYgev8S39TcGy0yh7Cs=
+github.com/ava-labs/coreth v0.12.3-0.20230615025405-324ec83ecba3 h1:LWx6xLlzwVGkDH72DrGxx8sPsiMIgI56bGnMPZlQatc=
+github.com/ava-labs/coreth v0.12.3-0.20230615025405-324ec83ecba3/go.mod h1:ER02R05Uy2CBKdswaCFl4T92vYgev8S39TcGy0yh7Cs=
 github.com/ava-labs/ledger-avalanche/go v0.0.0-20230105152938-00a24d05a8c7 h1:EdxD90j5sClfL5Ngpz2TlnbnkNYdFPDXa0jDOjam65c=
 github.com/ava-labs/ledger-avalanche/go v0.0.0-20230105152938-00a24d05a8c7/go.mod h1:XhiXSrh90sHUbkERzaxEftCmUz53eCijshDLZ4fByVM=
 github.com/aymerick/raymond v2.0.3-0.20180322193309-b565731e1464+incompatible/go.mod h1:osfaiScAUVup+UC9Nfq76eWqDhXlp+4UYaA8uhTBO6g=
