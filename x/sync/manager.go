@@ -611,14 +611,15 @@ func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestH
 
 	// completed the range [work.start, lastKey], log and record in the completed work heap
 	m.config.Log.Info("completed range",
-		zap.Binary("start", work.start),
-		zap.Binary("end", largestHandledKey),
+		zap.Uint8s("start", work.start),
+		zap.Uint8s("end", largestHandledKey),
+		zap.Uint8s("root", rootID[:]),
 	)
 	if m.getTargetRoot() == rootID {
 		m.workLock.Lock()
 		defer m.workLock.Unlock()
 
-		m.processedWork.MergeInsert(newWorkItem(rootID, work.start, largestHandledKey, work.priority))
+		m.processedWork.MergeInsert(m.config.Log, newWorkItem(rootID, work.start, largestHandledKey, work.priority))
 	} else {
 		// the root has changed, so reinsert with high priority
 		m.enqueueWork(newWorkItem(rootID, work.start, largestHandledKey, highPriority))

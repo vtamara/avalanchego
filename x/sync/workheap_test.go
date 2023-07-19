@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/logging"
 )
 
 // Tests heap.Interface methods Push, Pop, Swap, Len, Less.
@@ -230,42 +231,42 @@ func Test_WorkHeap_Merge_Insert(t *testing.T) {
 	// merge with range before
 	syncHeap := newWorkHeap()
 
-	syncHeap.MergeInsert(&workItem{start: nil, end: []byte{63}})
+	syncHeap.MergeInsert(logging.NoLog{}, &workItem{start: nil, end: []byte{63}})
 	require.Equal(t, 1, syncHeap.Len())
 
-	syncHeap.MergeInsert(&workItem{start: []byte{127}, end: []byte{192}})
+	syncHeap.MergeInsert(logging.NoLog{}, &workItem{start: []byte{127}, end: []byte{192}})
 	require.Equal(t, 2, syncHeap.Len())
 
-	syncHeap.MergeInsert(&workItem{start: []byte{193}, end: nil})
+	syncHeap.MergeInsert(logging.NoLog{}, &workItem{start: []byte{193}, end: nil})
 	require.Equal(t, 3, syncHeap.Len())
 
-	syncHeap.MergeInsert(&workItem{start: []byte{63}, end: []byte{126}, priority: lowPriority})
+	syncHeap.MergeInsert(logging.NoLog{}, &workItem{start: []byte{63}, end: []byte{126}, priority: lowPriority})
 	require.Equal(t, 3, syncHeap.Len())
 
 	// merge with range after
 	syncHeap = newWorkHeap()
 
-	syncHeap.MergeInsert(&workItem{start: nil, end: []byte{63}})
+	syncHeap.MergeInsert(logging.NoLog{}, &workItem{start: nil, end: []byte{63}})
 	require.Equal(t, 1, syncHeap.Len())
 
-	syncHeap.MergeInsert(&workItem{start: []byte{127}, end: []byte{192}})
+	syncHeap.MergeInsert(logging.NoLog{}, &workItem{start: []byte{127}, end: []byte{192}})
 	require.Equal(t, 2, syncHeap.Len())
 
-	syncHeap.MergeInsert(&workItem{start: []byte{193}, end: nil})
+	syncHeap.MergeInsert(logging.NoLog{}, &workItem{start: []byte{193}, end: nil})
 	require.Equal(t, 3, syncHeap.Len())
 
-	syncHeap.MergeInsert(&workItem{start: []byte{64}, end: []byte{127}, priority: lowPriority})
+	syncHeap.MergeInsert(logging.NoLog{}, &workItem{start: []byte{64}, end: []byte{127}, priority: lowPriority})
 	require.Equal(t, 3, syncHeap.Len())
 
 	// merge both sides at the same time
 	syncHeap = newWorkHeap()
 
-	syncHeap.MergeInsert(&workItem{start: nil, end: []byte{63}})
+	syncHeap.MergeInsert(logging.NoLog{}, &workItem{start: nil, end: []byte{63}})
 	require.Equal(t, 1, syncHeap.Len())
 
-	syncHeap.MergeInsert(&workItem{start: []byte{127}, end: nil})
+	syncHeap.MergeInsert(logging.NoLog{}, &workItem{start: []byte{127}, end: nil})
 	require.Equal(t, 2, syncHeap.Len())
 
-	syncHeap.MergeInsert(&workItem{start: []byte{63}, end: []byte{127}, priority: lowPriority})
+	syncHeap.MergeInsert(logging.NoLog{}, &workItem{start: []byte{63}, end: []byte{127}, priority: lowPriority})
 	require.Equal(t, 1, syncHeap.Len())
 }

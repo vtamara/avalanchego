@@ -7,7 +7,9 @@ import (
 	"bytes"
 	"container/heap"
 
+	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/math"
+	"go.uber.org/zap"
 
 	"github.com/google/btree"
 )
@@ -81,7 +83,14 @@ func (wh *workHeap) GetWork() *workItem {
 // into a single work item with range [0,20].
 // e.g. if the heap contains work items [0,10] and [20,30],
 // and we add [10,20], we will merge them into [0,30].
-func (wh *workHeap) MergeInsert(item *workItem) {
+func (wh *workHeap) MergeInsert(log logging.Logger, item *workItem) {
+	log.Info(
+		"item",
+		zap.Uint8s("start", item.start),
+		zap.Uint8s("end", item.end),
+		zap.Uint8s("root", item.localRootID[:]),
+	)
+
 	if wh.closed {
 		return
 	}
