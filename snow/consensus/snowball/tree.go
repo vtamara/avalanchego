@@ -542,15 +542,31 @@ func (b *binaryNode) RecordPoll(votes bag.Bag[ids.ID], reset bool) (node, bool) 
 	b.shouldReset[1-bit] = true // They didn't get the threshold of votes
 
 	prunedVotes := splitVotes[bit]
-	if prunedVotes.Len() < b.tree.params.Alpha {
+
+	alpha := b.tree.params.Alpha
+	if b.tree.params.Alpha2 > 0 {
+		// second alpha is defined,
+		// so use it as the threshold for updating confidence
+		alpha = b.tree.params.Alpha2
+	}
+
+	if prunedVotes.Len() < alpha {
 		b.snowball.RecordUnsuccessfulPoll()
 		// The winning child didn't get enough votes either
 		b.shouldReset[bit] = true
 		return b, false
 	}
 
-	// This bit got alpha votes, it was a successful poll
-	b.snowball.RecordSuccessfulPoll(bit)
+	// If this bit got alpha votes, it was a successful poll
+	if b.tree.params.Alpha2 == 0 || prunedVotes.Len() >= b.tree.params.Alpha {
+		// only update preference if we got enough votes >= alpha1
+		b.snowball.RecordSuccessfulPoll(bit)
+	} else {
+		// if we didn't get enough votes >= alpha1,
+		// then we should only increment confidence
+		// without updating preference
+		b.snowball.IncrementConfidence(bit)
+	}
 
 	if child := b.children[bit]; child != nil {
 		// The votes are filtered to ensure that they are votes that should

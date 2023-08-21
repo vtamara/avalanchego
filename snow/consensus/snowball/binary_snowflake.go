@@ -31,8 +31,14 @@ func (sf *binarySnowflake) Initialize(beta, choice int) {
 }
 
 func (sf *binarySnowflake) RecordSuccessfulPoll(choice int) {
+	if sf.IncrementConfidence(choice) {
+		sf.updatePreference(choice)
+	}
+}
+
+func (sf *binarySnowflake) IncrementConfidence(choice int) bool {
 	if sf.finalized {
-		return // This instance is already decided.
+		return false // This instance is already decided.
 	}
 
 	if preference := sf.Preference(); preference == choice {
@@ -44,6 +50,10 @@ func (sf *binarySnowflake) RecordSuccessfulPoll(choice int) {
 	}
 
 	sf.finalized = sf.confidence >= sf.beta
+	return true
+}
+
+func (sf *binarySnowflake) updatePreference(choice int) {
 	sf.binarySlush.RecordSuccessfulPoll(choice)
 }
 

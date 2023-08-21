@@ -108,6 +108,9 @@ type BinarySnowflake interface {
 	// Returns the currently preferred choice to be finalized
 	Preference() int
 
+	// Increments confidence without updating preference.
+	IncrementConfidence(choice int) bool
+
 	// RecordSuccessfulPoll records a successful poll towards finalizing the
 	// specified choice
 	RecordSuccessfulPoll(choice int)

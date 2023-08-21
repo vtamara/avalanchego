@@ -51,8 +51,12 @@ var (
 
 // Parameters required for snowball consensus
 type Parameters struct {
-	K                 int `json:"k" yaml:"k"`
-	Alpha             int `json:"alpha" yaml:"alpha"`
+	K     int `json:"k" yaml:"k"`
+	Alpha int `json:"alpha" yaml:"alpha"`
+	// Alpha2 is the preference threshold to update confidence.
+	// Must be smaller than or equal to Alpha.
+	Alpha2 int `json:"alpha2"`
+
 	BetaVirtuous      int `json:"betaVirtuous" yaml:"betaVirtuous"`
 	BetaRogue         int `json:"betaRogue" yaml:"betaRogue"`
 	ConcurrentRepolls int `json:"concurrentRepolls" yaml:"concurrentRepolls"`
