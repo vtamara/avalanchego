@@ -562,7 +562,7 @@ func (b *binaryNode) RecordPoll(votes bag.Bag[ids.ID], reset bool) (node, bool) 
 		// only update preference if we got enough votes >= alpha1
 		b.snowball.RecordSuccessfulPoll(bit)
 	} else {
-		// if we didn't get enough votes >= alpha1,
+		// if alpha2 is defined and we didn't get enough votes >= alpha1,
 		// then we should only increment confidence
 		// without updating preference
 		b.snowball.IncrementConfidence(bit)
