@@ -182,6 +182,7 @@ func (ss *stateSyncer) receivedStateSummaryFrontier(ctx context.Context) error {
 
 	// still waiting on requests
 	if ss.pendingSeeders.Len() != 0 {
+		ss.Ctx.Log.Info("waiting for pending seeders", zap.Int("count", ss.pendingSeeders.Len()))
 		return nil
 	}
 
@@ -235,7 +236,7 @@ func (ss *stateSyncer) AcceptedStateSummary(ctx context.Context, nodeID ids.Node
 	ss.pendingVoters.Remove(nodeID)
 
 	weight := ss.StateSyncBeacons.GetWeight(nodeID)
-	ss.Ctx.Log.Info("state sync beacon weight", zap.Stringer("nodeID", nodeID), zap.Uint64("weight", weight))
+	ss.Ctx.Log.Info("state sync beacon weight", zap.Stringer("nodeID", nodeID), zap.Uint64("weight", weight), zap.Any("summaries", summaryIDs), zap.Any("weighted summaries", ss.weightedSummaries))
 	for _, summaryID := range summaryIDs {
 		ws, ok := ss.weightedSummaries[summaryID]
 		if !ok {
