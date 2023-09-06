@@ -27,7 +27,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/platformvm/api"
-	"github.com/ava-labs/avalanchego/vms/platformvm/blocks"
+	"github.com/ava-labs/avalanchego/vms/platformvm/block"
 	"github.com/ava-labs/avalanchego/vms/platformvm/config"
 	"github.com/ava-labs/avalanchego/vms/platformvm/metrics"
 	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
@@ -204,7 +204,7 @@ func addPrimaryValidator(
 		Priority:        txs.PrimaryNetworkValidatorCurrentPriority,
 	})
 
-	blk, err := blocks.NewBanffStandardBlock(startTime, ids.GenerateTestID(), height, nil)
+	blk, err := block.NewBanffStandardBlock(startTime, ids.GenerateTestID(), height, nil)
 	if err != nil {
 		return ids.EmptyNodeID, err
 	}
@@ -234,7 +234,7 @@ func addSubnetValidator(
 		Priority:        txs.SubnetPermissionlessValidatorCurrentPriority,
 	})
 
-	blk, err := blocks.NewBanffStandardBlock(startTime, ids.GenerateTestID(), height, nil)
+	blk, err := block.NewBanffStandardBlock(startTime, ids.GenerateTestID(), height, nil)
 	if err != nil {
 		return err
 	}
@@ -252,7 +252,7 @@ func addSubnetDelegator(
 	nodeIDs []ids.NodeID,
 	height uint64,
 ) error {
-	i := rand.Intn(len(nodeIDs)) //#nosec G404
+	i := rand.Intn(len(nodeIDs)) // #nosec G404
 	nodeID := nodeIDs[i]
 	s.PutCurrentDelegator(&state.Staker{
 		TxID:            ids.GenerateTestID(),
@@ -266,7 +266,7 @@ func addSubnetDelegator(
 		Priority:        txs.SubnetPermissionlessDelegatorCurrentPriority,
 	})
 
-	blk, err := blocks.NewBanffStandardBlock(startTime, ids.GenerateTestID(), height, nil)
+	blk, err := block.NewBanffStandardBlock(startTime, ids.GenerateTestID(), height, nil)
 	if err != nil {
 		return err
 	}
