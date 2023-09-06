@@ -5,11 +5,10 @@ package avm
 
 import (
 	"context"
+	stdjson "encoding/json"
 	"errors"
 	"math/rand"
 	"testing"
-
-	stdjson "encoding/json"
 
 	"github.com/stretchr/testify/require"
 
@@ -30,7 +29,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/linkedhashmap"
 	"github.com/ava-labs/avalanchego/utils/sampler"
 	"github.com/ava-labs/avalanchego/version"
-	"github.com/ava-labs/avalanchego/vms/avm/blocks/executor"
+	"github.com/ava-labs/avalanchego/vms/avm/block/executor"
 	"github.com/ava-labs/avalanchego/vms/avm/config"
 	"github.com/ava-labs/avalanchego/vms/avm/fxs"
 	"github.com/ava-labs/avalanchego/vms/avm/txs"
@@ -46,7 +45,7 @@ const (
 	startBalance uint64 = 50000
 
 	username       = "bobby"
-	password       = "StrnasfqewiurPasswdn56d" //#nosec G101
+	password       = "StrnasfqewiurPasswdn56d" // #nosec G101
 	feeAssetName   = "TEST"
 	otherAssetName = "OTHER"
 )
