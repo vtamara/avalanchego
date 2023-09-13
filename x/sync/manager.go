@@ -395,8 +395,9 @@ func (m *Manager) findNextKey(
 	rangeEnd maybe.Maybe[[]byte],
 	endProof []merkledb.ProofNode,
 ) (maybe.Maybe[[]byte], error) {
-	return maybe.Some(lastReceivedKey), nil
-
+	nextKey := lastReceivedKey
+	nextKey = append(nextKey, 0)
+	return maybe.Some(nextKey), nil
 	// if len(endProof) == 0 {
 	// 	// We try to find the next key to fetch by looking at the end proof.
 	// 	// If the end proof is empty, we have no information to use.
