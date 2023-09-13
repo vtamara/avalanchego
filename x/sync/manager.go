@@ -187,6 +187,12 @@ func (m *Manager) sync(ctx context.Context) {
 			if m.processingWorkItems == 0 {
 				// There's no work to do, and there are no work items being processed
 				// which could cause work to be added, so we're done.
+				rootID, err := m.config.DB.GetMerkleRoot(ctx)
+				if err != nil {
+					m.setError(err)
+					return // [m.workLock] released by defer.
+				}
+				m.config.Log.Info("no more work to do", zap.Stringer("root", rootID))
 				return // [m.workLock] released by defer.
 			}
 			// There's no work to do.
