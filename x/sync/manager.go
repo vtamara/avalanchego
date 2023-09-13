@@ -57,6 +57,10 @@ type workItem struct {
 	localRootID ids.ID
 }
 
+func (w *workItem) String() string {
+	return fmt.Sprintf("start: %s, end: %s, priority: %d, localRootID: %s", w.start, w.end, w.priority, w.localRootID)
+}
+
 func newWorkItem(localRootID ids.ID, start maybe.Maybe[[]byte], end maybe.Maybe[[]byte], priority priority) *workItem {
 	return &workItem{
 		localRootID: localRootID,
@@ -147,7 +151,9 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	// Add work item to fetch the entire key range.
 	// Note that this will be the first work item to be processed.
-	m.unprocessedWork.Insert(newWorkItem(ids.Empty, maybe.Nothing[[]byte](), maybe.Nothing[[]byte](), lowPriority))
+	workItem := newWorkItem(ids.Empty, maybe.Nothing[[]byte](), maybe.Nothing[[]byte](), lowPriority)
+	m.config.Log.Info("adding initial work item", zap.Stringer("item", workItem))
+	m.unprocessedWork.Insert(workItem)
 
 	m.syncing = true
 	ctx, m.cancelCtx = context.WithCancel(ctx)
@@ -234,6 +240,8 @@ func (m *Manager) doWork(ctx context.Context, work *workItem) {
 		m.processingWorkItems--
 		m.unprocessedWorkCond.Signal()
 	}()
+
+	m.config.Log.Info("processing work item", zap.Stringer("item", work))
 
 	if work.localRootID == ids.Empty {
 		// the keys in this range have not been downloaded, so get all key/values
@@ -621,6 +629,8 @@ func (m *Manager) setError(err error) {
 //
 // Assumes [m.workLock] is not held.
 func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestHandledKey maybe.Maybe[[]byte], rootID ids.ID, proofOfLargestKey []merkledb.ProofNode) {
+	m.config.Log.Info("completed work item", zap.Stringer("item", work))
+
 	if !maybe.Equal(largestHandledKey, work.end, bytes.Equal) {
 		// The largest handled key isn't equal to the end of the work item.
 		// Find the start of the next key range to fetch.
@@ -658,6 +668,7 @@ func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestH
 		m.workLock.Lock()
 		defer m.workLock.Unlock()
 
+		m.config.Log.Info("adding item to processedWork", zap.Stringer("item", work))
 		m.processedWork.MergeInsert(newWorkItem(rootID, work.start, largestHandledKey, work.priority))
 	}
 
@@ -675,6 +686,8 @@ func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestH
 // splits the range into two items and queues them both.
 // Assumes [m.workLock] is not held.
 func (m *Manager) enqueueWork(work *workItem) {
+	m.config.Log.Info("adding unprocessed work item", zap.Stringer("item", work))
+
 	m.workLock.Lock()
 	defer func() {
 		m.workLock.Unlock()
