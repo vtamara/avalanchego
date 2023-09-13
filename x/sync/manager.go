@@ -214,6 +214,8 @@ func (m *Manager) Close() {
 // [workLock] must be held
 func (m *Manager) close() {
 	m.closeOnce.Do(func() {
+		m.config.Log.Info("closing sync manager")
+
 		// Don't process any more work items.
 		// Drop currently processing work items.
 		if m.cancelCtx != nil {
@@ -559,6 +561,8 @@ func (m *Manager) Wait(ctx context.Context) error {
 }
 
 func (m *Manager) UpdateSyncTarget(syncTargetRoot ids.ID) error {
+	m.config.Log.Info("updating sync target", zap.Stringer("root", syncTargetRoot))
+
 	m.syncTargetLock.Lock()
 	defer m.syncTargetLock.Unlock()
 
