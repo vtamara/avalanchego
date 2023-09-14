@@ -570,8 +570,6 @@ func (m *Manager) Wait(ctx context.Context) error {
 }
 
 func (m *Manager) UpdateSyncTarget(syncTargetRoot ids.ID) error {
-	m.config.Log.Info("updating sync target", zap.Stringer("root", syncTargetRoot))
-
 	m.syncTargetLock.Lock()
 	defer m.syncTargetLock.Unlock()
 
@@ -580,9 +578,12 @@ func (m *Manager) UpdateSyncTarget(syncTargetRoot ids.ID) error {
 
 	select {
 	case <-m.doneChan:
+		m.config.Log.Info("not updating sync target because we're done", zap.Stringer("root", syncTargetRoot))
 		return ErrAlreadyClosed
 	default:
 	}
+
+	m.config.Log.Info("updating sync target", zap.Stringer("root", syncTargetRoot))
 
 	if m.config.TargetRoot == syncTargetRoot {
 		// the target hasn't changed, so there is nothing to do
