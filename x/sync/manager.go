@@ -640,8 +640,6 @@ func (m *Manager) setError(err error) {
 // Assumes [m.workLock] is not held.
 func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestHandledKey maybe.Maybe[[]byte], rootID ids.ID, proofOfLargestKey []merkledb.ProofNode) {
 	m.config.Log.Info("completed work item", zap.Stringer("item", work))
-	m.workLock.Lock()
-	defer m.workLock.Unlock()
 
 	if !maybe.Equal(largestHandledKey, work.end, bytes.Equal) {
 		// The largest handled key isn't equal to the end of the work item.
@@ -661,6 +659,9 @@ func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestH
 		if nextStartKey.IsNothing() {
 			largestHandledKey = work.end
 		} else {
+			m.workLock.Lock()
+			defer m.workLock.Unlock()
+
 			// the full range wasn't completed, so enqueue a new work item for the range [nextStartKey, workItem.end]
 			m.enqueueWork(newWorkItem(work.localRootID, nextStartKey, work.end, work.priority))
 			largestHandledKey = nextStartKey
