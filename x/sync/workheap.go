@@ -140,7 +140,7 @@ func (wh *workHeap) MergeInsert(item *workItem) {
 		func(afterItem *heapItem) bool {
 			if item.localRootID == afterItem.workItem.localRootID &&
 				maybe.Equal(item.end, afterItem.workItem.start, bytes.Equal) {
-				wh.log.Info("workheap, merging with previous item", zap.Stringer("item", item), zap.Stringer("beforeItem", afterItem.workItem))
+				wh.log.Info("workheap, merging with following item", zap.Stringer("item", item), zap.Stringer("afterItem", afterItem.workItem))
 				// [item.start, item.end] and [afterItem.start, afterItem.end] are merged into
 				// [item.start, afterItem.end].
 				afterItem.workItem.start = item.start
@@ -176,6 +176,9 @@ func (wh *workHeap) MergeInsert(item *workItem) {
 	wh.sortedItems.Ascend(func(i *heapItem) bool {
 		defer func() { prevItem = i }()
 
+		// Print every item in the work heap
+		wh.log.Info("work heap iteration", zap.Stringer("item", i.workItem))
+
 		if prevItem == nil {
 			return true
 		}
@@ -185,8 +188,6 @@ func (wh *workHeap) MergeInsert(item *workItem) {
 			wh.log.Error("workheap, ranges not merged", zap.Stringer("prevItem", prevItem.workItem), zap.Stringer("item", i.workItem))
 		}
 
-		// Print every item in the work heap
-		wh.log.Info("work heap iteration", zap.Stringer("item", i.workItem))
 		return true
 	})
 	wh.log.Info("work heap iteration done", zap.Stringer("item", item))

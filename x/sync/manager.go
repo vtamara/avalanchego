@@ -192,7 +192,7 @@ func (m *Manager) sync(ctx context.Context) {
 					m.setError(err)
 					return // [m.workLock] released by defer.
 				}
-				m.config.Log.Info("no more work to do", zap.Stringer("root", rootID))
+				m.config.Log.Info("sync, no more work to do", zap.Stringer("root", rootID))
 				return // [m.workLock] released by defer.
 			}
 			// There's no work to do.
@@ -249,7 +249,7 @@ func (m *Manager) doWork(ctx context.Context, work *workItem) {
 		m.unprocessedWorkCond.Signal()
 	}()
 
-	m.config.Log.Info("processing work item", zap.Stringer("item", work))
+	m.config.Log.Info("dowork", zap.Stringer("item", work))
 
 	if work.localRootID == ids.Empty {
 		// the keys in this range have not been downloaded, so get all key/values
@@ -266,6 +266,7 @@ func (m *Manager) getAndApplyChangeProof(ctx context.Context, work *workItem) {
 	targetRootID := m.getTargetRoot()
 
 	if work.localRootID == targetRootID {
+		m.config.Log.Info("getAndApplyChangeProof, already have target root", zap.Stringer("item", work))
 		// Start root is the same as the end root, so we're done.
 		m.completeWorkItem(ctx, work, work.end, targetRootID, nil)
 		return
@@ -314,6 +315,7 @@ func (m *Manager) getAndApplyChangeProof(ctx context.Context, work *workItem) {
 			largestHandledKey = maybe.Some(changeProof.KeyChanges[len(changeProof.KeyChanges)-1].Key)
 		}
 
+		m.config.Log.Info("getAndApplyChangeProof, marking completed after change proof", zap.Stringer("item", work))
 		m.completeWorkItem(ctx, work, largestHandledKey, targetRootID, changeProof.EndProof)
 		return
 	}
@@ -330,6 +332,7 @@ func (m *Manager) getAndApplyChangeProof(ctx context.Context, work *workItem) {
 		largestHandledKey = maybe.Some(rangeProof.KeyValues[len(rangeProof.KeyValues)-1].Key)
 	}
 
+	m.config.Log.Info("getAndApplyChangeProof, marking completed after range proof", zap.Stringer("item", work))
 	m.completeWorkItem(ctx, work, largestHandledKey, targetRootID, rangeProof.EndProof)
 }
 
@@ -639,7 +642,7 @@ func (m *Manager) setError(err error) {
 //
 // Assumes [m.workLock] is not held.
 func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestHandledKey maybe.Maybe[[]byte], rootID ids.ID, proofOfLargestKey []merkledb.ProofNode) {
-	m.config.Log.Info("completed work item", zap.Stringer("item", work))
+	m.config.Log.Info("completeWorkItem", zap.Stringer("item", work))
 
 	if !maybe.Equal(largestHandledKey, work.end, bytes.Equal) {
 		// The largest handled key isn't equal to the end of the work item.
@@ -654,13 +657,18 @@ func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestH
 			m.setError(err)
 			return
 		}
+		m.config.Log.Info("completeWorkItem nextStartKey", zap.Stringer("nextStartKey", nextStartKey))
 
 		// nextStartKey being Nothing indicates that the entire range has been completed
 		if nextStartKey.IsNothing() {
+			m.config.Log.Info("completeWorkItem, range complete", zap.Stringer("item", work))
 			largestHandledKey = work.end
 		} else {
+			m.config.Log.Info("completeWorkItem, range incomplete", zap.Stringer("item", work))
+			newWork := newWorkItem(work.localRootID, nextStartKey, work.end, work.priority)
+			m.config.Log.Info("completeWorkItem, new work", zap.Stringer("newWork", newWork))
 			// the full range wasn't completed, so enqueue a new work item for the range [nextStartKey, workItem.end]
-			m.enqueueWork(newWorkItem(work.localRootID, nextStartKey, work.end, work.priority))
+			m.enqueueWork(newWork)
 			largestHandledKey = nextStartKey
 		}
 	}
@@ -672,23 +680,28 @@ func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestH
 
 	stale := m.config.TargetRoot != rootID
 	if stale {
+		m.config.Log.Info("completeWorkItem, stale, reinserting", zap.Stringer("item", work))
+		newWork := newWorkItem(rootID, work.start, largestHandledKey, highPriority)
+		m.config.Log.Info("completeWorkItem, stale, new work", zap.Stringer("newWork", newWork))
 		// the root has changed, so reinsert with high priority
-		m.enqueueWork(newWorkItem(rootID, work.start, largestHandledKey, highPriority))
+		m.enqueueWork(newWork)
 	} else {
 		m.workLock.Lock()
 		defer m.workLock.Unlock()
 
-		m.config.Log.Info("adding item to processedWork", zap.Stringer("item", work))
-		m.processedWork.MergeInsert(newWorkItem(rootID, work.start, largestHandledKey, work.priority))
+		m.config.Log.Info("completeWorkItem, not stale, marking as processed after", zap.Stringer("item", work))
+		newWork := newWorkItem(rootID, work.start, largestHandledKey, work.priority)
+		m.config.Log.Info("completeWorkItem, not stale, marking as processed", zap.Stringer("item", newWork))
+		m.processedWork.MergeInsert(newWork)
 	}
 
 	// completed the range [work.start, lastKey], log and record in the completed work heap
-	m.config.Log.Info("completed range",
-		zap.Stringer("start", work.start),
-		zap.Stringer("end", largestHandledKey),
-		zap.Stringer("rootID", rootID),
-		zap.Bool("stale", stale),
-	)
+	// m.config.Log.Info("completed range",
+	// 	zap.Stringer("start", work.start),
+	// 	zap.Stringer("end", largestHandledKey),
+	// 	zap.Stringer("rootID", rootID),
+	// 	zap.Bool("stale", stale),
+	// )
 }
 
 // Queue the given key range to be fetched and applied.
