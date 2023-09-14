@@ -250,6 +250,9 @@ func (m *Manager) getAndApplyChangeProof(ctx context.Context, work *workItem) {
 	targetRootID := m.getTargetRoot()
 
 	if work.localRootID == targetRootID {
+		m.workLock.Lock()
+		defer m.workLock.Unlock()
+
 		// Start root is the same as the end root, so we're done.
 		m.completeWorkItem(ctx, work, work.end, targetRootID, nil)
 		return
@@ -284,6 +287,9 @@ func (m *Manager) getAndApplyChangeProof(ctx context.Context, work *workItem) {
 		return
 	default:
 	}
+
+	m.workLock.Lock()
+	defer m.workLock.Unlock()
 
 	if changeOrRangeProof.ChangeProof != nil {
 		// The server had sufficient history to respond with a change proof.
@@ -347,6 +353,9 @@ func (m *Manager) getAndApplyRangeProof(ctx context.Context, work *workItem) {
 		return
 	default:
 	}
+
+	m.workLock.Lock()
+	defer m.workLock.Unlock()
 
 	largestHandledKey := work.end
 	if len(proof.KeyValues) > 0 {
@@ -551,11 +560,11 @@ func (m *Manager) Wait(ctx context.Context) error {
 }
 
 func (m *Manager) UpdateSyncTarget(syncTargetRoot ids.ID) error {
-	m.syncTargetLock.Lock()
-	defer m.syncTargetLock.Unlock()
-
 	m.workLock.Lock()
 	defer m.workLock.Unlock()
+
+	m.syncTargetLock.Lock()
+	defer m.syncTargetLock.Unlock()
 
 	select {
 	case <-m.doneChan:
@@ -619,7 +628,7 @@ func (m *Manager) setError(err error) {
 // [proofOfLargestKey] is the end proof for the range/change proof
 // that gave us the range up to and including [largestHandledKey].
 //
-// Assumes [m.workLock] is not held.
+// Assumes [m.workLock] is held.
 func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestHandledKey maybe.Maybe[[]byte], rootID ids.ID, proofOfLargestKey []merkledb.ProofNode) {
 	if !maybe.Equal(largestHandledKey, work.end, bytes.Equal) {
 		// The largest handled key isn't equal to the end of the work item.
@@ -655,9 +664,6 @@ func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestH
 		// the root has changed, so reinsert with high priority
 		m.enqueueWork(newWorkItem(rootID, work.start, largestHandledKey, highPriority))
 	} else {
-		m.workLock.Lock()
-		defer m.workLock.Unlock()
-
 		m.processedWork.MergeInsert(newWorkItem(rootID, work.start, largestHandledKey, work.priority))
 	}
 
@@ -673,13 +679,9 @@ func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestH
 // Queue the given key range to be fetched and applied.
 // If there are sufficiently few unprocessed/processing work items,
 // splits the range into two items and queues them both.
-// Assumes [m.workLock] is not held.
+// Assumes [m.workLock] is held.
 func (m *Manager) enqueueWork(work *workItem) {
-	m.workLock.Lock()
-	defer func() {
-		m.workLock.Unlock()
-		m.unprocessedWorkCond.Signal()
-	}()
+	defer m.unprocessedWorkCond.Signal()
 
 	if m.processingWorkItems+m.unprocessedWork.Len() > 2*m.config.SimultaneousWorkLimit {
 		// There are too many work items already, don't split the range
