@@ -14,6 +14,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils"
+	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/maybe"
 )
 
@@ -116,7 +117,7 @@ func Test_WorkHeap_InnerHeap(t *testing.T) {
 // Tests Insert and GetWork
 func Test_WorkHeap_Insert_GetWork(t *testing.T) {
 	require := require.New(t)
-	h := newWorkHeap()
+	h := newWorkHeap(&logging.NoLog{})
 
 	lowPriorityItem := &workItem{
 		start:       maybe.Some([]byte{4}),
@@ -170,7 +171,7 @@ func Test_WorkHeap_Insert_GetWork(t *testing.T) {
 func Test_WorkHeap_remove(t *testing.T) {
 	require := require.New(t)
 
-	h := newWorkHeap()
+	h := newWorkHeap(&logging.NoLog{})
 
 	lowPriorityItem := &workItem{
 		start:       maybe.Some([]byte{0}),
@@ -234,7 +235,7 @@ func Test_WorkHeap_remove(t *testing.T) {
 
 func Test_WorkHeap_Merge_Insert(t *testing.T) {
 	// merge with range before
-	syncHeap := newWorkHeap()
+	syncHeap := newWorkHeap(&logging.NoLog{})
 
 	syncHeap.MergeInsert(&workItem{start: maybe.Nothing[[]byte](), end: maybe.Some([]byte{63})})
 	require.Equal(t, 1, syncHeap.Len())
@@ -249,7 +250,7 @@ func Test_WorkHeap_Merge_Insert(t *testing.T) {
 	require.Equal(t, 3, syncHeap.Len())
 
 	// merge with range after
-	syncHeap = newWorkHeap()
+	syncHeap = newWorkHeap(&logging.NoLog{})
 
 	syncHeap.MergeInsert(&workItem{start: maybe.Nothing[[]byte](), end: maybe.Some([]byte{63})})
 	require.Equal(t, 1, syncHeap.Len())
@@ -264,7 +265,7 @@ func Test_WorkHeap_Merge_Insert(t *testing.T) {
 	require.Equal(t, 3, syncHeap.Len())
 
 	// merge both sides at the same time
-	syncHeap = newWorkHeap()
+	syncHeap = newWorkHeap(&logging.NoLog{})
 
 	syncHeap.MergeInsert(&workItem{start: maybe.Nothing[[]byte](), end: maybe.Some([]byte{63})})
 	require.Equal(t, 1, syncHeap.Len())
@@ -317,7 +318,7 @@ func TestWorkHeapMergeInsertRandom(t *testing.T) {
 
 	setup := func() *workHeap {
 		// Insert all the ranges into the heap.
-		h := newWorkHeap()
+		h := newWorkHeap(&logging.NoLog{})
 		for i, r := range ranges {
 			require.Equal(i, h.Len())
 			rCopy := r

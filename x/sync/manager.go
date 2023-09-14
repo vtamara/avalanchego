@@ -133,8 +133,8 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 	m := &Manager{
 		config:          config,
 		doneChan:        make(chan struct{}),
-		unprocessedWork: newWorkHeap(),
-		processedWork:   newWorkHeap(),
+		unprocessedWork: newWorkHeap(config.Log),
+		processedWork:   newWorkHeap(config.Log),
 	}
 	m.unprocessedWorkCond.L = &m.workLock
 

@@ -7,8 +7,10 @@ import (
 	"bytes"
 	"container/heap"
 
+	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/maybe"
+	"go.uber.org/zap"
 
 	"github.com/google/btree"
 )
@@ -27,6 +29,7 @@ type innerHeap []*heapItem
 // Supports range merging and priority updating.
 // Not safe for concurrent use.
 type workHeap struct {
+	log logging.Logger
 	// Max heap of items by priority.
 	// i.e. heap.Pop returns highest priority item.
 	innerHeap innerHeap
@@ -36,8 +39,9 @@ type workHeap struct {
 	closed      bool
 }
 
-func newWorkHeap() *workHeap {
+func newWorkHeap(log logging.Logger) *workHeap {
 	return &workHeap{
+		log: log,
 		sortedItems: btree.NewG(
 			2,
 			func(a, b *heapItem) bool {
@@ -70,6 +74,8 @@ func (wh *workHeap) Insert(item *workItem) {
 		return
 	}
 
+	wh.log.Info("workheap, inserting work item", zap.Stringer("item", item))
+
 	wrappedItem := &heapItem{workItem: item}
 
 	heap.Push(&wh.innerHeap, wrappedItem)
@@ -99,6 +105,8 @@ func (wh *workHeap) MergeInsert(item *workItem) {
 		return
 	}
 
+	wh.log.Info("workheap, merge inserting work item", zap.Stringer("item", item))
+
 	var mergedBefore, mergedAfter *heapItem
 	searchItem := &heapItem{
 		workItem: &workItem{
@@ -113,6 +121,8 @@ func (wh *workHeap) MergeInsert(item *workItem) {
 		func(beforeItem *heapItem) bool {
 			if item.localRootID == beforeItem.workItem.localRootID &&
 				maybe.Equal(item.start, beforeItem.workItem.end, bytes.Equal) {
+				wh.log.Info("workheap, merging with previous item", zap.Stringer("item", item), zap.Stringer("beforeItem", beforeItem.workItem))
+
 				// [beforeItem.start, beforeItem.end] and [item.start, item.end] are
 				// merged into [beforeItem.start, item.end]
 				beforeItem.workItem.end = item.end
@@ -130,6 +140,7 @@ func (wh *workHeap) MergeInsert(item *workItem) {
 		func(afterItem *heapItem) bool {
 			if item.localRootID == afterItem.workItem.localRootID &&
 				maybe.Equal(item.end, afterItem.workItem.start, bytes.Equal) {
+				wh.log.Info("workheap, merging with previous item", zap.Stringer("item", item), zap.Stringer("beforeItem", afterItem.workItem))
 				// [item.start, item.end] and [afterItem.start, afterItem.end] are merged into
 				// [item.start, afterItem.end].
 				afterItem.workItem.start = item.start
@@ -154,9 +165,28 @@ func (wh *workHeap) MergeInsert(item *workItem) {
 
 	// nothing was merged, so add new item to the heap
 	if mergedBefore == nil && mergedAfter == nil {
+		wh.log.Info("workheap, not merging with neighbors")
 		// We didn't merge [item] with an existing one; put it in the heap.
 		wh.Insert(item)
 	}
+
+	// TODO remove this debug statement.
+	// Assert workheap is valid.
+	var prevItem *heapItem
+	wh.sortedItems.Ascend(func(i *heapItem) bool {
+		defer func() { prevItem = i }()
+		if prevItem == nil {
+			return true
+		}
+
+		// Make sure the ranges are non-overlapping.
+		if bytes.Compare(prevItem.workItem.end.Value(), i.workItem.start.Value()) >= 0 {
+			wh.log.Error("workheap, ranges not merged", zap.Stringer("prevItem", prevItem.workItem), zap.Stringer("item", i.workItem))
+		}
+
+		return true
+	})
+
 }
 
 // Deletes [item] from the heap.
