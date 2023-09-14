@@ -165,7 +165,7 @@ func (wh *workHeap) MergeInsert(item *workItem) {
 
 	// nothing was merged, so add new item to the heap
 	if mergedBefore == nil && mergedAfter == nil {
-		wh.log.Info("workheap, not merging with neighbors")
+		wh.log.Info("workheap, not merging with neighbors", zap.Stringer("item", item))
 		// We didn't merge [item] with an existing one; put it in the heap.
 		wh.Insert(item)
 	}
@@ -175,17 +175,17 @@ func (wh *workHeap) MergeInsert(item *workItem) {
 	var prevItem *heapItem
 	wh.sortedItems.Ascend(func(i *heapItem) bool {
 		defer func() { prevItem = i }()
-		if prevItem == nil {
-			return true
-		}
 
 		// Make sure the ranges are non-overlapping.
 		if bytes.Compare(prevItem.workItem.end.Value(), i.workItem.start.Value()) >= 0 {
 			wh.log.Error("workheap, ranges not merged", zap.Stringer("prevItem", prevItem.workItem), zap.Stringer("item", i.workItem))
 		}
 
+		// Print every item in the work heap
+		wh.log.Info("work heap iteration", zap.Stringer("item", i.workItem))
 		return true
 	})
+	wh.log.Info("work heap iteration done", zap.Stringer("item", item))
 
 }
 
