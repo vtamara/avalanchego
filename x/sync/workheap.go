@@ -176,6 +176,10 @@ func (wh *workHeap) MergeInsert(item *workItem) {
 	wh.sortedItems.Ascend(func(i *heapItem) bool {
 		defer func() { prevItem = i }()
 
+		if prevItem == nil {
+			return true
+		}
+
 		// Make sure the ranges are non-overlapping.
 		if bytes.Compare(prevItem.workItem.end.Value(), i.workItem.start.Value()) >= 0 {
 			wh.log.Error("workheap, ranges not merged", zap.Stringer("prevItem", prevItem.workItem), zap.Stringer("item", i.workItem))
