@@ -402,13 +402,28 @@ func (m *Manager) getAndApplyRangeProof(ctx context.Context, work *workItem) {
 
 	largestHandledKey := work.end
 	if len(proof.KeyValues) > 0 {
+		oldRootID, err := m.config.DB.GetMerkleRoot(ctx)
+		if err != nil {
+			m.setError(err)
+			return
+		}
+
 		// Add all the key-value pairs we got to the database.
 		if err := m.config.DB.CommitRangeProof(ctx, work.start, proof); err != nil {
 			m.setError(err)
 			return
 		}
-
 		largestHandledKey = maybe.Some(proof.KeyValues[len(proof.KeyValues)-1].Key)
+
+		newRootID, err := m.config.DB.GetMerkleRoot(ctx)
+		if err != nil {
+			m.setError(err)
+			return
+		}
+
+		m.config.Log.Info("getAndApplyRangeProof, applied range proof", zap.Stringer("oldRootID", oldRootID), zap.Stringer("newRootID", newRootID), zap.Stringer("item", work), zap.Stringer("largestHandledKey", largestHandledKey))
+	} else {
+		m.config.Log.Info("getAndApplyRangeProof, range proof was empty", zap.Stringer("item", work))
 	}
 
 	m.completeWorkItem(ctx, work, largestHandledKey, targetRootID, proof.EndProof)
