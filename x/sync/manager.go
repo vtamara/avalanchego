@@ -308,11 +308,28 @@ func (m *Manager) getAndApplyChangeProof(ctx context.Context, work *workItem) {
 		largestHandledKey := work.end
 		// if the proof wasn't empty, apply changes to the sync DB
 		if len(changeProof.KeyChanges) > 0 {
+			oldRootID, err := m.config.DB.GetMerkleRoot(ctx)
+			if err != nil {
+				m.setError(err)
+				return
+			}
+
 			if err := m.config.DB.CommitChangeProof(ctx, changeProof); err != nil {
 				m.setError(err)
 				return
 			}
+
+			newRootID, err := m.config.DB.GetMerkleRoot(ctx)
+			if err != nil {
+				m.setError(err)
+				return
+			}
+
 			largestHandledKey = maybe.Some(changeProof.KeyChanges[len(changeProof.KeyChanges)-1].Key)
+
+			m.config.Log.Info("getAndApplyChangeProof, applied change proof", zap.Stringer("oldRootID", oldRootID), zap.Stringer("newRootID", newRootID), zap.Stringer("item", work), zap.Stringer("largestHandledKey", largestHandledKey))
+		} else {
+			m.config.Log.Info("getAndApplyChangeProof, change proof was empty", zap.Stringer("item", work))
 		}
 
 		m.config.Log.Info("getAndApplyChangeProof, marking completed after change proof", zap.Stringer("item", work), zap.Stringer("targetRootID", targetRootID))
@@ -324,12 +341,28 @@ func (m *Manager) getAndApplyChangeProof(ctx context.Context, work *workItem) {
 	rangeProof := changeOrRangeProof.RangeProof
 	largestHandledKey := work.end
 	if len(rangeProof.KeyValues) > 0 {
+		oldRootID, err := m.config.DB.GetMerkleRoot(ctx)
+		if err != nil {
+			m.setError(err)
+			return
+		}
+
 		// Add all the key-value pairs we got to the database.
 		if err := m.config.DB.CommitRangeProof(ctx, work.start, rangeProof); err != nil {
 			m.setError(err)
 			return
 		}
 		largestHandledKey = maybe.Some(rangeProof.KeyValues[len(rangeProof.KeyValues)-1].Key)
+
+		newRootID, err := m.config.DB.GetMerkleRoot(ctx)
+		if err != nil {
+			m.setError(err)
+			return
+		}
+
+		m.config.Log.Info("getAndApplyChangeProof, applied range proof", zap.Stringer("oldRootID", oldRootID), zap.Stringer("newRootID", newRootID), zap.Stringer("item", work), zap.Stringer("largestHandledKey", largestHandledKey))
+	} else {
+		m.config.Log.Info("getAndApplyChangeProof, range proof was empty", zap.Stringer("item", work))
 	}
 
 	m.config.Log.Info("getAndApplyChangeProof, marking completed after range proof", zap.Stringer("item", work), zap.Stringer("targetRootID", targetRootID))
@@ -600,6 +633,7 @@ func (m *Manager) UpdateSyncTarget(syncTargetRoot ids.ID) error {
 		// and we checked that [m.closed] is false.
 		currentItem := m.processedWork.GetWork()
 		currentItem.priority = highPriority
+		m.config.Log.Info("updating sync target, marking as unprocessed", zap.Stringer("item", currentItem))
 		m.unprocessedWork.Insert(currentItem)
 	}
 	if shouldSignal {
