@@ -315,7 +315,7 @@ func (m *Manager) getAndApplyChangeProof(ctx context.Context, work *workItem) {
 			largestHandledKey = maybe.Some(changeProof.KeyChanges[len(changeProof.KeyChanges)-1].Key)
 		}
 
-		m.config.Log.Info("getAndApplyChangeProof, marking completed after change proof", zap.Stringer("item", work))
+		m.config.Log.Info("getAndApplyChangeProof, marking completed after change proof", zap.Stringer("item", work), zap.Stringer("targetRootID", targetRootID))
 		m.completeWorkItem(ctx, work, largestHandledKey, targetRootID, changeProof.EndProof)
 		return
 	}
@@ -332,7 +332,7 @@ func (m *Manager) getAndApplyChangeProof(ctx context.Context, work *workItem) {
 		largestHandledKey = maybe.Some(rangeProof.KeyValues[len(rangeProof.KeyValues)-1].Key)
 	}
 
-	m.config.Log.Info("getAndApplyChangeProof, marking completed after range proof", zap.Stringer("item", work))
+	m.config.Log.Info("getAndApplyChangeProof, marking completed after range proof", zap.Stringer("item", work), zap.Stringer("targetRootID", targetRootID))
 	m.completeWorkItem(ctx, work, largestHandledKey, targetRootID, rangeProof.EndProof)
 }
 
