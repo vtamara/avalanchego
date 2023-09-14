@@ -659,9 +659,6 @@ func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestH
 		if nextStartKey.IsNothing() {
 			largestHandledKey = work.end
 		} else {
-			m.workLock.Lock()
-			defer m.workLock.Unlock()
-
 			// the full range wasn't completed, so enqueue a new work item for the range [nextStartKey, workItem.end]
 			m.enqueueWork(newWorkItem(work.localRootID, nextStartKey, work.end, work.priority))
 			largestHandledKey = nextStartKey
@@ -678,6 +675,9 @@ func (m *Manager) completeWorkItem(ctx context.Context, work *workItem, largestH
 		// the root has changed, so reinsert with high priority
 		m.enqueueWork(newWorkItem(rootID, work.start, largestHandledKey, highPriority))
 	} else {
+		m.workLock.Lock()
+		defer m.workLock.Unlock()
+
 		m.config.Log.Info("adding item to processedWork", zap.Stringer("item", work))
 		m.processedWork.MergeInsert(newWorkItem(rootID, work.start, largestHandledKey, work.priority))
 	}
