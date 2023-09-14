@@ -610,8 +610,18 @@ func (m *Manager) Wait(ctx context.Context) error {
 		return err
 	}
 	if targetRootID := m.getTargetRoot(); targetRootID != root {
+		err := fmt.Errorf("%w: expected %s, got %s", ErrFinishedWithUnexpectedRoot, targetRootID, root)
+
+		iter := m.config.DB.(merkledb.MerkleDB).NewIterator()
+		defer iter.Release()
+
+		for iter.Next() {
+			m.config.Log.Info("key", zap.String("key", fmt.Sprintf("%v", iter.Key())))
+			m.config.Log.Info("value", zap.String("value", fmt.Sprintf("%v", iter.Value())))
+		}
+
 		// This should never happen.
-		return fmt.Errorf("%w: expected %s, got %s", ErrFinishedWithUnexpectedRoot, targetRootID, root)
+		return err
 	}
 	m.config.Log.Info("completed", zap.String("new root", root.String()))
 	return nil
