@@ -7,20 +7,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	gomath "math"
 	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	gomath "math"
-
 	"github.com/pires/go-proxyproto"
-
 	"github.com/prometheus/client_golang/prometheus"
-
 	"go.uber.org/zap"
-
 	"golang.org/x/exp/maps"
 
 	"github.com/ava-labs/avalanchego/api/health"

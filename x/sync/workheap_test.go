@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 	"golang.org/x/exp/slices"
 
 	"github.com/ava-labs/avalanchego/ids"

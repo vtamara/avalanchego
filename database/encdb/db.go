@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"golang.org/x/crypto/chacha20poly1305"
-
 	"golang.org/x/exp/slices"
 
 	"github.com/ava-labs/avalanchego/codec"

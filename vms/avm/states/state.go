@@ -7,13 +7,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	stdmath "math"
 	"sync"
 	"time"
 
-	stdmath "math"
-
 	"github.com/prometheus/client_golang/prometheus"
-
 	"go.uber.org/zap"
 
 	"github.com/ava-labs/avalanchego/cache"

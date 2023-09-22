@@ -4,13 +4,11 @@
 package c
 
 import (
+	stdcontext "context"
 	"errors"
 	"fmt"
 
-	stdcontext "context"
-
 	"github.com/ava-labs/coreth/plugin/evm"
-
 	ethcommon "github.com/ethereum/go-ethereum/common"
 
 	"github.com/ava-labs/avalanchego/database"

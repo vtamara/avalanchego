@@ -4,15 +4,13 @@
 package secp256k1
 
 import (
+	stdecdsa "crypto/ecdsa"
 	"errors"
 	"fmt"
 	"strings"
 
-	stdecdsa "crypto/ecdsa"
-
-	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
-
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
 
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/ids"

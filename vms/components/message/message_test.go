@@ -7,11 +7,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ava-labs/avalanchego/codec"
-
 	pb "github.com/ava-labs/avalanchego/proto/pb/message"
 )
 

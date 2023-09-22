@@ -4,9 +4,8 @@
 package health
 
 import (
-	"net/http"
-
 	stdjson "encoding/json"
+	"net/http"
 
 	"github.com/gorilla/rpc/v2"
 

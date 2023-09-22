@@ -5,7 +5,6 @@ package rpcdb
 
 import (
 	"github.com/ava-labs/avalanchego/database"
-
 	rpcdbpb "github.com/ava-labs/avalanchego/proto/pb/rpcdb"
 )
 

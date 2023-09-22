@@ -5,7 +5,6 @@ package set
 
 import (
 	"bytes"
-
 	stdjson "encoding/json"
 
 	"golang.org/x/exp/maps"

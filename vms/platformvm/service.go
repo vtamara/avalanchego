@@ -5,16 +5,14 @@ package platformvm
 
 import (
 	"context"
+	stdjson "encoding/json"
 	"errors"
 	"fmt"
+	stdmath "math"
 	"net/http"
 	"time"
 
-	stdjson "encoding/json"
-	stdmath "math"
-
 	"go.uber.org/zap"
-
 	"golang.org/x/exp/maps"
 
 	"github.com/ava-labs/avalanchego/api"
@@ -34,6 +32,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/keystore"
+	platformapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
 	"github.com/ava-labs/avalanchego/vms/platformvm/fx"
 	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
 	"github.com/ava-labs/avalanchego/vms/platformvm/signer"
@@ -44,8 +43,6 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs/builder"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs/executor"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
-
-	platformapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
 )
 
 const (

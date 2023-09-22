@@ -6,9 +6,8 @@ package secp256k1
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/ids"

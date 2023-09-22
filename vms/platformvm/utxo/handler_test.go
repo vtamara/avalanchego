@@ -4,10 +4,9 @@
 package utxo
 
 import (
+	stdmath "math"
 	"testing"
 	"time"
-
-	stdmath "math"
 
 	"github.com/stretchr/testify/require"
 

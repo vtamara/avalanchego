@@ -7,10 +7,9 @@ import (
 	"context"
 
 	"github.com/ava-labs/avalanchego/ids"
+	appsenderpb "github.com/ava-labs/avalanchego/proto/pb/appsender"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/set"
-
-	appsenderpb "github.com/ava-labs/avalanchego/proto/pb/appsender"
 )
 
 var _ common.AppSender = (*Client)(nil)

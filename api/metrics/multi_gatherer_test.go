@@ -6,9 +6,8 @@ package metrics
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	dto "github.com/prometheus/client_model/go"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMultiGathererEmptyGather(t *testing.T) {

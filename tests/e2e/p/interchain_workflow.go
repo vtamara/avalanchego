@@ -7,13 +7,10 @@ import (
 	"math/big"
 	"time"
 
-	ginkgo "github.com/onsi/ginkgo/v2"
-
-	"github.com/spf13/cast"
-
-	"github.com/stretchr/testify/require"
-
 	"github.com/ava-labs/coreth/plugin/evm"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	"github.com/spf13/cast"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/config"

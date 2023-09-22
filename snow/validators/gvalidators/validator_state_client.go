@@ -10,10 +10,9 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/ava-labs/avalanchego/ids"
+	pb "github.com/ava-labs/avalanchego/proto/pb/validatorstate"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
-
-	pb "github.com/ava-labs/avalanchego/proto/pb/validatorstate"
 )
 
 var (

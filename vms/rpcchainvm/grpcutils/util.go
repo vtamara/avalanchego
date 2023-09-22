@@ -8,12 +8,10 @@ import (
 	"net/http"
 	"time"
 
+	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
-
-	spb "google.golang.org/genproto/googleapis/rpc/status"
-
 	tspb "google.golang.org/protobuf/types/known/timestamppb"
 
 	httppb "github.com/ava-labs/avalanchego/proto/pb/http"

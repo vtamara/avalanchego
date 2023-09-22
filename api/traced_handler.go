@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"go.opentelemetry.io/otel/attribute"
-
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/ava-labs/avalanchego/trace"

@@ -6,7 +6,6 @@ package executor
 import (
 	"errors"
 	"fmt"
-
 	stdmath "math"
 
 	"github.com/ava-labs/avalanchego/database"

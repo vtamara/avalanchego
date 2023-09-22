@@ -4,10 +4,9 @@
 package executor
 
 import (
+	stdmath "math"
 	"strings"
 	"testing"
-
-	stdmath "math"
 
 	"github.com/stretchr/testify/require"
 

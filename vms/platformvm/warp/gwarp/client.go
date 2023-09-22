@@ -6,9 +6,8 @@ package gwarp
 import (
 	"context"
 
-	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
-
 	pb "github.com/ava-labs/avalanchego/proto/pb/warp"
+	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 )
 
 var _ warp.Signer = (*Client)(nil)

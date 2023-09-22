@@ -6,9 +6,8 @@ package gruntime
 import (
 	"context"
 
-	"github.com/ava-labs/avalanchego/vms/rpcchainvm/runtime"
-
 	pb "github.com/ava-labs/avalanchego/proto/pb/vm/runtime"
+	"github.com/ava-labs/avalanchego/vms/rpcchainvm/runtime"
 )
 
 var _ runtime.Initializer = (*Client)(nil)

@@ -6,11 +6,9 @@ package x
 import (
 	"math/big"
 
-	ginkgo "github.com/onsi/ginkgo/v2"
-
-	"github.com/stretchr/testify/require"
-
 	"github.com/ava-labs/coreth/plugin/evm"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/tests/e2e"

@@ -4,14 +4,12 @@
 package sync
 
 import (
+	stdmath "math"
 	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-
-	stdmath "math"
-
 	"go.uber.org/zap"
 
 	"github.com/ava-labs/avalanchego/ids"

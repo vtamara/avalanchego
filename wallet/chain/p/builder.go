@@ -4,11 +4,10 @@
 package p
 
 import (
+	stdcontext "context"
 	"errors"
 	"fmt"
 	"time"
-
-	stdcontext "context"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils"

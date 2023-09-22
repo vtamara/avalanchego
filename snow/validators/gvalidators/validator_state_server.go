@@ -9,9 +9,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow/validators"
-
 	pb "github.com/ava-labs/avalanchego/proto/pb/validatorstate"
+	"github.com/ava-labs/avalanchego/snow/validators"
 )
 
 var _ pb.ValidatorStateServer = (*Server)(nil)

@@ -5,9 +5,8 @@ package sampler
 
 import (
 	"fmt"
-	"testing"
-
 	stdmath "math"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 

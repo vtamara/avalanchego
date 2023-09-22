@@ -10,15 +10,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
 	"go.uber.org/mock/gomock"
 
 	"github.com/ava-labs/avalanchego/ids"
+	pb "github.com/ava-labs/avalanchego/proto/pb/validatorstate"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm/grpcutils"
-
-	pb "github.com/ava-labs/avalanchego/proto/pb/validatorstate"
 )
 
 var errCustom = errors.New("custom")

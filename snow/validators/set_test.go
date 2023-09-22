@@ -4,9 +4,8 @@
 package validators
 
 import (
-	"testing"
-
 	stdmath "math"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 

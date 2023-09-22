@@ -7,10 +7,10 @@ import (
 	"bytes"
 	"container/heap"
 
+	"github.com/google/btree"
+
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/maybe"
-
-	"github.com/google/btree"
 )
 
 var _ heap.Interface = (*innerHeap)(nil)

@@ -12,9 +12,8 @@ import (
 
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/ava-labs/avalanchego/utils/wrappers"
-
 	connpb "github.com/ava-labs/avalanchego/proto/pb/net/conn"
+	"github.com/ava-labs/avalanchego/utils/wrappers"
 )
 
 var _ net.Conn = (*Client)(nil)

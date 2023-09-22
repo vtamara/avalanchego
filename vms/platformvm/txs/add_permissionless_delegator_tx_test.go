@@ -5,12 +5,10 @@ package txs
 
 import (
 	"errors"
+	stdmath "math"
 	"testing"
 
-	stdmath "math"
-
 	"github.com/stretchr/testify/require"
-
 	"go.uber.org/mock/gomock"
 
 	"github.com/ava-labs/avalanchego/ids"

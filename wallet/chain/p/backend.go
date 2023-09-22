@@ -4,9 +4,8 @@
 package p
 
 import (
-	"sync"
-
 	stdcontext "context"
+	"sync"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"

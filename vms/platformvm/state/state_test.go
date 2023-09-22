@@ -5,13 +5,11 @@ package state
 
 import (
 	"context"
+	stdmath "math"
 	"testing"
 	"time"
 
-	stdmath "math"
-
 	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/database"

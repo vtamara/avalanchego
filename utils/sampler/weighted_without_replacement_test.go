@@ -5,12 +5,10 @@ package sampler
 
 import (
 	"fmt"
+	stdmath "math"
 	"testing"
 
-	stdmath "math"
-
 	"github.com/stretchr/testify/require"
-
 	"golang.org/x/exp/slices"
 
 	"github.com/ava-labs/avalanchego/utils/math"

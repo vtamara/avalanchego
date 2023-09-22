@@ -7,9 +7,8 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/spaolacci/murmur3"
-
 	streakKnife "github.com/holiman/bloomfilter/v2"
+	"github.com/spaolacci/murmur3"
 )
 
 var errMaxBytes = errors.New("too large")

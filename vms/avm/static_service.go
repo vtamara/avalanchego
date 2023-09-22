@@ -4,11 +4,10 @@
 package avm
 
 import (
+	stdjson "encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-
-	stdjson "encoding/json"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils"

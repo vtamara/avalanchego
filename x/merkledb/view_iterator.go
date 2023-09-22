@@ -6,9 +6,9 @@ package merkledb
 import (
 	"bytes"
 
-	"github.com/ava-labs/avalanchego/database"
-
 	"golang.org/x/exp/slices"
+
+	"github.com/ava-labs/avalanchego/database"
 )
 
 func (t *trieView) NewIterator() database.Iterator {
