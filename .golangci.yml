@@ -22,6 +22,7 @@ linters:
     - errorlint
     - exportloopref
     - forbidigo
+    - gci
     - goconst
     - gocritic
     - gofmt
@@ -50,8 +51,6 @@ linters:
     # - lll
 
 linters-settings:
-  goimports:
-    local-prefixes: github.com/ava-labs/avalanchego
   depguard:
     list-type: blacklist
     packages-with-error-message:
@@ -127,3 +126,12 @@ linters-settings:
       - "all"
       - "-SA6002" # argument should be pointer-like to avoid allocation, for sync.Pool
       - "-SA1019" # deprecated packages e.g., golang.org/x/crypto/ripemd160
+  gci:
+    sections:
+      - standard
+      - default
+      - blank
+      - dot
+      - prefix(github.com/ava-labs/avalanchego)
+    skip-generated: true
+    custom-order: true
