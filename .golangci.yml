@@ -45,6 +45,7 @@ linters:
     - unconvert
     - unparam
     - unused
+    - usestdlibvars
     - whitespace
     # - goerr113
     # - gomnd
