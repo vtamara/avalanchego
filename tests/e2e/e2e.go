@@ -133,13 +133,9 @@ func (te *TestEnvironment) NewKeychain(count int) *secp256k1fx.Keychain {
 	return secp256k1fx.NewKeychain(keys...)
 }
 
-// TODO(marun) Make this a regular function.
-func (*TestEnvironment) NewWallet(keychain *secp256k1fx.Keychain, nodeURI testnet.NodeURI) primary.Wallet {
-	return NewWalletWithTxIDs(keychain, nodeURI, nil)
-}
-
 // Create a new wallet for the provided keychain against the specified node URI.
-func NewWalletWithTxIDs(keychain *secp256k1fx.Keychain, nodeURI testnet.NodeURI, txIDs []ids.ID) primary.Wallet {
+// TODO(marun) Make this a regular function.
+func (te *TestEnvironment) NewWallet(keychain *secp256k1fx.Keychain, nodeURI testnet.NodeURI, txIDs ...ids.ID) primary.Wallet {
 	tests.Outf("{{blue}} initializing a new wallet for node %s with URI: %s {{/}}\n", nodeURI.NodeID, nodeURI.URI)
 	baseWallet, err := primary.MakeWallet(DefaultContext(), &primary.WalletConfig{
 		URI:              nodeURI.URI,
@@ -147,7 +143,7 @@ func NewWalletWithTxIDs(keychain *secp256k1fx.Keychain, nodeURI testnet.NodeURI,
 		EthKeychain:      keychain,
 		PChainTxsToFetch: set.Of(txIDs...),
 	})
-	require.NoError(ginkgo.GinkgoT(), err)
+	te.require.NoError(err)
 	return primary.NewWalletWithOptions(
 		baseWallet,
 		common.WithPostIssuanceFunc(
