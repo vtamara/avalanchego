@@ -138,7 +138,7 @@ func (c *codecImpl) decodeDBNode(b []byte, n *dbNode, branchFactor BranchFactor)
 		return io.ErrUnexpectedEOF
 	}
 
-	src := bytes.NewReader(b)
+	src := &sliceReader{data: b}
 
 	value, err := c.decodeMaybeByteSlice(src)
 	if err != nil {
@@ -200,7 +200,7 @@ func (*codecImpl) encodeBool(dst *bytes.Buffer, value bool) {
 	_, _ = dst.Write(bytesValue)
 }
 
-func (*codecImpl) decodeBool(src *bytes.Reader) (bool, error) {
+func (*codecImpl) decodeBool(src *sliceReader) (bool, error) {
 	boolByte, err := src.ReadByte()
 	switch {
 	case err == io.EOF:
@@ -216,7 +216,7 @@ func (*codecImpl) decodeBool(src *bytes.Reader) (bool, error) {
 	}
 }
 
-func (*codecImpl) decodeUint(src *bytes.Reader) (uint64, error) {
+func (*codecImpl) decodeUint(src *sliceReader) (uint64, error) {
 	// To ensure encoding/decoding is canonical, we need to check for leading
 	// zeroes in the varint.
 	// The last byte of the varint we read is the most significant byte.
@@ -234,9 +234,7 @@ func (*codecImpl) decodeUint(src *bytes.Reader) (uint64, error) {
 
 	// Just 0x00 is a valid value so don't check if the varint is 1 byte
 	if startLen-endLen > 1 {
-		if err := src.UnreadByte(); err != nil {
-			return 0, err
-		}
+		src.UnreadByte()
 		lastByte, err := src.ReadByte()
 		if err != nil {
 			return 0, err
@@ -264,7 +262,7 @@ func (c *codecImpl) encodeMaybeByteSlice(dst *bytes.Buffer, maybeValue maybe.May
 	}
 }
 
-func (c *codecImpl) decodeMaybeByteSlice(src *bytes.Reader) (maybe.Maybe[[]byte], error) {
+func (c *codecImpl) decodeMaybeByteSlice(src *sliceReader) (maybe.Maybe[[]byte], error) {
 	if minMaybeByteSliceLen > src.Len() {
 		return maybe.Nothing[[]byte](), io.ErrUnexpectedEOF
 	}
@@ -281,7 +279,7 @@ func (c *codecImpl) decodeMaybeByteSlice(src *bytes.Reader) (maybe.Maybe[[]byte]
 	return maybe.Some(bytes), nil
 }
 
-func (c *codecImpl) decodeByteSlice(src *bytes.Reader) ([]byte, error) {
+func (c *codecImpl) decodeByteSlice(src *sliceReader) ([]byte, error) {
 	if minByteSliceLen > src.Len() {
 		return nil, io.ErrUnexpectedEOF
 	}
@@ -298,8 +296,7 @@ func (c *codecImpl) decodeByteSlice(src *bytes.Reader) ([]byte, error) {
 		return nil, io.ErrUnexpectedEOF
 	}
 
-	result := make([]byte, length)
-	_, err = io.ReadFull(src, result)
+	result, err := src.getSlice(int(length))
 	if err == io.EOF {
 		err = io.ErrUnexpectedEOF
 	}
@@ -313,17 +310,12 @@ func (c *codecImpl) encodeByteSlice(dst *bytes.Buffer, value []byte) {
 	}
 }
 
-func (*codecImpl) decodeID(src *bytes.Reader) (ids.ID, error) {
-	if ids.IDLen > src.Len() {
-		return ids.ID{}, io.ErrUnexpectedEOF
+func (*codecImpl) decodeID(src *sliceReader) (ids.ID, error) {
+	idBytes, err := src.getSlice(len(ids.Empty))
+	if err != nil {
+		return ids.Empty, err
 	}
-
-	var id ids.ID
-	_, err := io.ReadFull(src, id[:])
-	if err == io.EOF {
-		err = io.ErrUnexpectedEOF
-	}
-	return id, err
+	return ids.ID(idBytes), nil
 }
 
 func (c *codecImpl) encodePath(dst *bytes.Buffer, p Path) {
@@ -331,7 +323,7 @@ func (c *codecImpl) encodePath(dst *bytes.Buffer, p Path) {
 	_, _ = dst.Write(p.Bytes())
 }
 
-func (c *codecImpl) decodePath(src *bytes.Reader, branchFactor BranchFactor) (Path, error) {
+func (c *codecImpl) decodePath(src *sliceReader, branchFactor BranchFactor) (Path, error) {
 	if minPathLen > src.Len() {
 		return Path{}, io.ErrUnexpectedEOF
 	}
@@ -349,8 +341,8 @@ func (c *codecImpl) decodePath(src *bytes.Reader, branchFactor BranchFactor) (Pa
 	if pathBytesLen > src.Len() {
 		return Path{}, io.ErrUnexpectedEOF
 	}
-	buffer := make([]byte, pathBytesLen)
-	if _, err := io.ReadFull(src, buffer); err != nil {
+	buffer, err := src.getSlice(pathBytesLen)
+	if err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
@@ -367,4 +359,34 @@ func (c *codecImpl) decodePath(src *bytes.Reader, branchFactor BranchFactor) (Pa
 	}
 	result.value = string(buffer)
 	return result, nil
+}
+
+type sliceReader struct {
+	data   []byte
+	offset int
+}
+
+func (sr *sliceReader) getSlice(length int) ([]byte, error) {
+	if sr.Len() < length {
+		return nil, io.ErrUnexpectedEOF
+	}
+	sr.offset += length
+	return sr.data[sr.offset-length : sr.offset], nil
+}
+
+func (sr *sliceReader) UnreadByte() {
+	sr.offset--
+}
+
+func (sr *sliceReader) ReadByte() (byte, error) {
+	if sr.Len() < 1 {
+		return 0, io.ErrUnexpectedEOF
+	}
+	val := sr.data[sr.offset]
+	sr.offset++
+	return val, nil
+}
+
+func (sr *sliceReader) Len() int {
+	return len(sr.data) - sr.offset
 }

@@ -26,7 +26,7 @@ func FuzzCodecBool(f *testing.F) {
 			require := require.New(t)
 
 			codec := codec.(*codecImpl)
-			reader := bytes.NewReader(b)
+			reader := &sliceReader{data: b}
 			startLen := reader.Len()
 			got, err := codec.decodeBool(reader)
 			if err != nil {
@@ -54,7 +54,7 @@ func FuzzCodecInt(f *testing.F) {
 			require := require.New(t)
 
 			codec := codec.(*codecImpl)
-			reader := bytes.NewReader(b)
+			reader := &sliceReader{data: b}
 			startLen := reader.Len()
 			got, err := codec.decodeUint(reader)
 			if err != nil {
@@ -82,7 +82,7 @@ func FuzzCodecPath(f *testing.F) {
 			require := require.New(t)
 			for _, branchFactor := range branchFactors {
 				codec := codec.(*codecImpl)
-				reader := bytes.NewReader(b)
+				reader := &sliceReader{data: b}
 				startLen := reader.Len()
 				got, err := codec.decodePath(reader, branchFactor)
 				if err != nil {
@@ -266,7 +266,7 @@ func FuzzEncodeHashValues(f *testing.F) {
 
 func TestCodecDecodePathLengthOverflowRegression(t *testing.T) {
 	codec := codec.(*codecImpl)
-	bytes := bytes.NewReader(binary.AppendUvarint(nil, math.MaxInt))
+	bytes := &sliceReader{data: binary.AppendUvarint(nil, math.MaxInt)}
 	_, err := codec.decodePath(bytes, BranchFactor16)
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 }
