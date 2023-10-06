@@ -429,14 +429,8 @@ func (db *merkleDB) PrefetchPaths(keys [][]byte) error {
 	if db.closed {
 		return database.ErrClosed
 	}
-
-	// reuse the view so that it can keep repeated nodes in memory
-	tempView, err := newTrieView(db, db, ViewChanges{})
-	if err != nil {
-		return err
-	}
 	for _, key := range keys {
-		if err := db.prefetchPath(tempView, key); err != nil {
+		if err := db.prefetchPath(key); err != nil {
 			return err
 		}
 	}
@@ -451,16 +445,12 @@ func (db *merkleDB) PrefetchPath(key []byte) error {
 	if db.closed {
 		return database.ErrClosed
 	}
-	tempView, err := newTrieView(db, db, ViewChanges{})
-	if err != nil {
-		return err
-	}
 
-	return db.prefetchPath(tempView, key)
+	return db.prefetchPath(key)
 }
 
-func (db *merkleDB) prefetchPath(view *trieView, key []byte) error {
-	pathToKey, err := view.getPathTo(db.newPath(key))
+func (db *merkleDB) prefetchPath(key []byte) error {
+	pathToKey, err := getPathTo(db, db.newPath(key))
 	if err != nil {
 		return err
 	}
@@ -1245,6 +1235,10 @@ func (db *merkleDB) getNodeWithoutLock(key Path, hasValue bool) (*node, error) {
 		return db.valueNodeDB.Get(key)
 	}
 	return db.intermediateNodeDB.Get(key)
+}
+
+func (db *merkleDB) getRoot() *node {
+	return db.root
 }
 
 // Returns [key] prefixed by [prefix].

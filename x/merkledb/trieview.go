@@ -338,7 +338,7 @@ func (t *trieView) getProof(ctx context.Context, key []byte) (*Proof, error) {
 		Key: t.db.newPath(key),
 	}
 
-	proofPath, err := t.getPathTo(proof.Key)
+	proofPath, err := getPathTo(t, proof.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -619,7 +619,7 @@ func (t *trieView) remove(key Path) error {
 		return ErrNodesAlreadyCalculated
 	}
 
-	nodePath, err := t.getPathTo(key)
+	nodePath, err := getPathTo(t, key)
 	if err != nil {
 		return err
 	}
@@ -730,48 +730,6 @@ func (t *trieView) deleteEmptyNodes(nodePath []*node) error {
 	return t.compressNodePath(parent, node)
 }
 
-// Returns the nodes along the path to [key].
-// The first node is the root, and the last node is either the node with the
-// given [key], if it's in the trie, or the node with the largest prefix of
-// the [key] if it isn't in the trie.
-// Always returns at least the root node.
-func (t *trieView) getPathTo(key Path) ([]*node, error) {
-	var (
-		// all node paths start at the root
-		currentNode      = t.root
-		matchedPathIndex = 0
-		nodes            = []*node{t.root}
-	)
-
-	// while the entire path hasn't been matched
-	for matchedPathIndex < key.tokensLength {
-		// confirm that a child exists and grab its ID before attempting to load it
-		nextChildEntry, hasChild := currentNode.children[key.Token(matchedPathIndex)]
-
-		// the current token for the child entry has now been handled, so increment the matchedPathIndex
-		matchedPathIndex += 1
-
-		if !hasChild || !key.Skip(matchedPathIndex).HasPrefix(nextChildEntry.compressedPath) {
-			// there was no child along the path or the child that was there doesn't match the remaining path
-			return nodes, nil
-		}
-
-		// the compressed path of the entry there matched the path, so increment the matched index
-		matchedPathIndex += nextChildEntry.compressedPath.tokensLength
-
-		// grab the next node along the path
-		var err error
-		currentNode, err = t.getNode(key.Take(matchedPathIndex), nextChildEntry.hasValue)
-		if err != nil {
-			return nil, err
-		}
-
-		// add node to path
-		nodes = append(nodes, currentNode)
-	}
-	return nodes, nil
-}
-
 func getLengthOfCommonPrefix(first, second Path, secondOffset int) int {
 	commonIndex := 0
 	for first.tokensLength > commonIndex && second.tokensLength > (commonIndex+secondOffset) && first.Token(commonIndex) == second.Token(commonIndex+secondOffset) {
@@ -791,7 +749,7 @@ func (t *trieView) insert(
 	}
 
 	// find the node that most closely matches [key]
-	pathToNode, err := t.getPathTo(key)
+	pathToNode, err := getPathTo(t, key)
 	if err != nil {
 		return nil, err
 	}
@@ -968,4 +926,8 @@ func (t *trieView) getParentTrie() TrieView {
 	t.validityTrackingLock.RLock()
 	defer t.validityTrackingLock.RUnlock()
 	return t.parentTrie
+}
+
+func (t *trieView) getRoot() *node {
+	return t.root
 }

@@ -39,6 +39,7 @@ type ReadOnlyTrie interface {
 	getValue(key Path) ([]byte, error)
 
 	getNode(key Path, hasValue bool) (*node, error)
+	getRoot() *node
 
 	// GetRangeProof returns a proof of up to [maxLength] key-value pairs with
 	// keys in range [start, end].
@@ -74,4 +75,46 @@ type TrieView interface {
 	// CommitToDB writes the changes in this view to the database.
 	// Takes the DB commit lock.
 	CommitToDB(ctx context.Context) error
+}
+
+// Returns the nodes along the path to [key].
+// The first node is the root, and the last node is either the node with the
+// given [key], if it's in the trie, or the node with the largest prefix of
+// the [key] if it isn't in the trie.
+// Always returns at least the root node.
+func getPathTo(t ReadOnlyTrie, key Path) ([]*node, error) {
+	var (
+		// all node paths start at the root
+		currentNode      = t.getRoot()
+		matchedPathIndex = 0
+		nodes            = []*node{currentNode}
+	)
+
+	// while the entire path hasn't been matched
+	for matchedPathIndex < key.tokensLength {
+		// confirm that a child exists and grab its ID before attempting to load it
+		nextChildEntry, hasChild := currentNode.children[key.Token(matchedPathIndex)]
+
+		// the current token for the child entry has now been handled, so increment the matchedPathIndex
+		matchedPathIndex += 1
+
+		if !hasChild || !key.Skip(matchedPathIndex).HasPrefix(nextChildEntry.compressedPath) {
+			// there was no child along the path or the child that was there doesn't match the remaining path
+			return nodes, nil
+		}
+
+		// the compressed path of the entry there matched the path, so increment the matched index
+		matchedPathIndex += nextChildEntry.compressedPath.tokensLength
+
+		// grab the next node along the path
+		var err error
+		currentNode, err = t.getNode(key.Take(matchedPathIndex), nextChildEntry.hasValue)
+		if err != nil {
+			return nil, err
+		}
+
+		// add node to path
+		nodes = append(nodes, currentNode)
+	}
+	return nodes, nil
 }
