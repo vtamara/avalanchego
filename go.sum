@@ -71,6 +71,8 @@ github.com/ava-labs/coreth v0.12.6-0.20231006004457-b487a3faeb2c h1:cpgRijHsatW9
 github.com/ava-labs/coreth v0.12.6-0.20231006004457-b487a3faeb2c/go.mod h1:998m+/YbrVTrnBpndUHR6T7n20tI8i+y0sxlKc7AHKs=
 github.com/ava-labs/coreth v0.12.6-0.20231006153221-67c341d12613 h1:r5VKdajJQ164Erk4oy77bf9mFNN39BAK9yF+vzqGiXY=
 github.com/ava-labs/coreth v0.12.6-0.20231006153221-67c341d12613/go.mod h1:998m+/YbrVTrnBpndUHR6T7n20tI8i+y0sxlKc7AHKs=
+github.com/ava-labs/coreth v0.12.6-0.20231007004207-9bbe9707f5b7 h1:3E19T7gXiIwovJbe8TEFFJZU3ctFOlZt6VpolP/k2xU=
+github.com/ava-labs/coreth v0.12.6-0.20231007004207-9bbe9707f5b7/go.mod h1:998m+/YbrVTrnBpndUHR6T7n20tI8i+y0sxlKc7AHKs=
 github.com/ava-labs/ledger-avalanche/go v0.0.0-20230105152938-00a24d05a8c7 h1:EdxD90j5sClfL5Ngpz2TlnbnkNYdFPDXa0jDOjam65c=
 github.com/ava-labs/ledger-avalanche/go v0.0.0-20230105152938-00a24d05a8c7/go.mod h1:XhiXSrh90sHUbkERzaxEftCmUz53eCijshDLZ4fByVM=
 github.com/aymerick/raymond v2.0.3-0.20180322193309-b565731e1464+incompatible/go.mod h1:osfaiScAUVup+UC9Nfq76eWqDhXlp+4UYaA8uhTBO6g=
