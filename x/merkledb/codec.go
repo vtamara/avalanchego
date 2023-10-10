@@ -108,11 +108,7 @@ func (c *codecImpl) encodeDBNode(n *dbNode, branchFactor BranchFactor) []byte {
 }
 
 func (c *codecImpl) encodeHashValues(buf io.Writer, n *node) {
-	var (
-		numChildren = len(n.children)
-	)
-
-	c.encodeUint(buf, uint64(numChildren))
+	c.encodeUint(buf, uint64(len(n.children)))
 
 	// ensure that the order of entries is consistent
 	for index := 0; BranchFactor(index) < n.key.branchFactor; index++ {
