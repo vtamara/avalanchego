@@ -247,18 +247,22 @@ func FuzzEncodeHashValues(f *testing.F) {
 				key := make([]byte, r.Intn(32)) // #nosec G404
 				_, _ = r.Read(key)              // #nosec G404
 
-				hv := &hashValues{
-					Children: children,
-					Value:    value,
-					Key:      NewPath(key, branchFactor),
+				hv := &node{
+					key: NewPath(key, branchFactor),
+					dbNode: dbNode{
+						children: children,
+						value:    value,
+					},
 				}
 
 				// Serialize the *hashValues with both codecs
-				hvBytes1 := codec1.encodeHashValues(hv)
-				hvBytes2 := codec2.encodeHashValues(hv)
+				buf1 := bytes.NewBuffer(make([]byte, 32))
+				buf2 := bytes.NewBuffer(make([]byte, 32))
+				codec1.encodeHashValues(buf1, hv)
+				codec2.encodeHashValues(buf2, hv)
 
 				// Make sure they're the same
-				require.Equal(hvBytes1, hvBytes2)
+				require.Equal(buf1.Bytes(), buf2.Bytes())
 			}
 		},
 	)

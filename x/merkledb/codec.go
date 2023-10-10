@@ -26,13 +26,10 @@ const (
 	minDBNodeLen         = minMaybeByteSliceLen + minVarIntLen
 	minChildLen          = minVarIntLen + minPathLen + ids.IDLen + boolLen
 
-	estimatedKeyLen            = 64
 	estimatedValueLen          = 64
 	estimatedCompressedPathLen = 8
 	// Child index, child compressed path, child ID, child has value
 	estimatedNodeChildLen = minVarIntLen + estimatedCompressedPathLen + ids.IDLen + boolLen
-	// Child index, child ID
-	hashValuesChildLen = minVarIntLen + ids.IDLen
 )
 
 var (
@@ -61,7 +58,7 @@ type encoder interface {
 	// Assumes [n] is non-nil.
 	encodeDBNode(n *dbNode, factor BranchFactor) []byte
 	// Assumes [hv] is non-nil.
-	encodeHashValues(hv *hashValues) []byte
+	encodeHashValues(buff io.Writer, n *node)
 }
 
 type decoder interface {
@@ -110,27 +107,22 @@ func (c *codecImpl) encodeDBNode(n *dbNode, branchFactor BranchFactor) []byte {
 	return buf.Bytes()
 }
 
-func (c *codecImpl) encodeHashValues(hv *hashValues) []byte {
+func (c *codecImpl) encodeHashValues(buf io.Writer, n *node) {
 	var (
-		numChildren = len(hv.Children)
-		// Estimate size [hv] to prevent memory allocations
-		estimatedLen = minVarIntLen + numChildren*hashValuesChildLen + estimatedValueLen + estimatedKeyLen
-		buf          = bytes.NewBuffer(make([]byte, 0, estimatedLen))
+		numChildren = len(n.children)
 	)
 
 	c.encodeUint(buf, uint64(numChildren))
 
 	// ensure that the order of entries is consistent
-	for index := 0; BranchFactor(index) < hv.Key.branchFactor; index++ {
-		if entry, ok := hv.Children[byte(index)]; ok {
+	for index := 0; BranchFactor(index) < n.key.branchFactor; index++ {
+		if entry, ok := n.children[byte(index)]; ok {
 			c.encodeUint(buf, uint64(index))
 			_, _ = buf.Write(entry.id[:])
 		}
 	}
-	c.encodeMaybeByteSlice(buf, hv.Value)
-	c.encodePath(buf, hv.Key)
-
-	return buf.Bytes()
+	c.encodeMaybeByteSlice(buf, n.valueDigest)
+	c.encodePath(buf, n.key)
 }
 
 func (c *codecImpl) decodeDBNode(b []byte, n *dbNode, branchFactor BranchFactor) error {
@@ -192,7 +184,7 @@ func (c *codecImpl) decodeDBNode(b []byte, n *dbNode, branchFactor BranchFactor)
 	return nil
 }
 
-func (*codecImpl) encodeBool(dst *bytes.Buffer, value bool) {
+func (*codecImpl) encodeBool(dst io.Writer, value bool) {
 	bytesValue := falseBytes
 	if value {
 		bytesValue = trueBytes
@@ -247,14 +239,30 @@ func (*codecImpl) decodeUint(src *sliceReader) (uint64, error) {
 	return val64, nil
 }
 
-func (c *codecImpl) encodeUint(dst *bytes.Buffer, value uint64) {
+func (c *codecImpl) encodeUint2(dst io.Writer, value uint64) {
 	buf := c.varIntPool.Get().([]byte)
 	size := binary.PutUvarint(buf, value)
 	_, _ = dst.Write(buf[:size])
 	c.varIntPool.Put(buf)
 }
 
-func (c *codecImpl) encodeMaybeByteSlice(dst *bytes.Buffer, maybeValue maybe.Maybe[[]byte]) {
+func (c *codecImpl) encodeUint(dst io.Writer, value uint64) error {
+	buf := make([]byte, 1)
+	i := 0
+	for value >= 0x80 {
+		buf[0] = byte(value) | 0x80
+		if _, err := dst.Write(buf); err != nil {
+			return err
+		}
+		value >>= 7
+		i++
+	}
+	buf[0] = byte(value)
+	_, err := dst.Write(buf)
+	return err
+}
+
+func (c *codecImpl) encodeMaybeByteSlice(dst io.Writer, maybeValue maybe.Maybe[[]byte]) {
 	hasValue := maybeValue.HasValue()
 	c.encodeBool(dst, hasValue)
 	if hasValue {
@@ -303,7 +311,7 @@ func (c *codecImpl) decodeByteSlice(src *sliceReader) ([]byte, error) {
 	return result, err
 }
 
-func (c *codecImpl) encodeByteSlice(dst *bytes.Buffer, value []byte) {
+func (c *codecImpl) encodeByteSlice(dst io.Writer, value []byte) {
 	c.encodeUint(dst, uint64(len(value)))
 	if value != nil {
 		_, _ = dst.Write(value)
@@ -318,7 +326,7 @@ func (*codecImpl) decodeID(src *sliceReader) (ids.ID, error) {
 	return ids.ID(idBytes), nil
 }
 
-func (c *codecImpl) encodePath(dst *bytes.Buffer, p Path) {
+func (c *codecImpl) encodePath(dst io.Writer, p Path) {
 	c.encodeUint(dst, uint64(p.tokensLength))
 	_, _ = dst.Write(p.Bytes())
 }
