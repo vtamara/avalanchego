@@ -38,7 +38,11 @@ type ReadOnlyTrie interface {
 	// database.ErrNotFound if the key is not present
 	getValue(key Path) ([]byte, error)
 
-	getNode(key Path, hasValue bool) (*node, error)
+	// get an editable copy of the node with the given key path
+	// hasValue indicates which db to look in (value or intermediate)
+	getEditableNode(key Path, hasValue bool) (*node, error)
+
+	// get the root node of the current trie
 	getRoot() *node
 
 	// GetRangeProof returns a proof of up to [maxLength] key-value pairs with
