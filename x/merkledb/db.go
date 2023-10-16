@@ -443,14 +443,8 @@ func (db *merkleDB) PrefetchPaths(keys [][]byte) error {
 	if db.closed {
 		return database.ErrClosed
 	}
-
-	// reuse the view so that it can keep repeated nodes in memory
-	tempView, err := newTrieView(db, db, ViewChanges{})
-	if err != nil {
-		return err
-	}
 	for _, key := range keys {
-		if err := db.prefetchPath(tempView, key); err != nil {
+		if err := db.prefetchPath(key); err != nil {
 			return err
 		}
 	}
@@ -465,16 +459,12 @@ func (db *merkleDB) PrefetchPath(key []byte) error {
 	if db.closed {
 		return database.ErrClosed
 	}
-	tempView, err := newTrieView(db, db, ViewChanges{})
-	if err != nil {
-		return err
-	}
 
-	return db.prefetchPath(tempView, key)
+	return db.prefetchPath(key)
 }
 
-func (db *merkleDB) prefetchPath(view *trieView, key []byte) error {
-	pathToKey, err := view.getPathTo(db.newPath(key))
+func (db *merkleDB) prefetchPath(key []byte) error {
+	pathToKey, err := getPathTo(db, db.newPath(key))
 	if err != nil {
 		return err
 	}
@@ -554,7 +544,7 @@ func (db *merkleDB) getValueWithoutLock(key Path) ([]byte, error) {
 		return nil, database.ErrClosed
 	}
 
-	n, err := db.getNode(key, true /* hasValue */)
+	n, err := db.getNodeWithoutLock(key, true /* hasValue */)
 	if err != nil {
 		return nil, err
 	}
@@ -922,7 +912,7 @@ func (db *merkleDB) commitChanges(ctx context.Context, trieToCommit *trieView) e
 	// move any child views of the committed trie onto the db
 	db.moveChildViewsToDB(trieToCommit)
 
-	if len(changes.nodes) == 0 {
+	if len(changes.values) == 0 {
 		return nil
 	}
 
@@ -1233,15 +1223,15 @@ func (db *merkleDB) getKeysNotInSet(start, end maybe.Maybe[[]byte], keySet set.S
 // This copy may be edited by the caller without affecting the database state.
 // Returns database.ErrNotFound if the node doesn't exist.
 // Assumes [db.lock] isn't held.
-func (db *merkleDB) getEditableNode(key Path, hasValue bool) (*node, error) {
+func (db *merkleDB) getNode(key Path, hasValue bool) (*node, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	n, err := db.getNode(key, hasValue)
+	n, err := db.getNodeWithoutLock(key, hasValue)
 	if err != nil {
 		return nil, err
 	}
-	return n.clone(), nil
+	return n, nil
 }
 
 // Returns the node with the given [key].
@@ -1249,7 +1239,7 @@ func (db *merkleDB) getEditableNode(key Path, hasValue bool) (*node, error) {
 // Editing the returned node affects the database state.
 // Returns database.ErrNotFound if the node doesn't exist.
 // Assumes [db.lock] is read locked.
-func (db *merkleDB) getNode(key Path, hasValue bool) (*node, error) {
+func (db *merkleDB) getNodeWithoutLock(key Path, hasValue bool) (*node, error) {
 	switch {
 	case db.closed:
 		return nil, database.ErrClosed
@@ -1259,6 +1249,10 @@ func (db *merkleDB) getNode(key Path, hasValue bool) (*node, error) {
 		return db.valueNodeDB.Get(key)
 	}
 	return db.intermediateNodeDB.Get(key)
+}
+
+func (db *merkleDB) getRoot() *node {
+	return db.root
 }
 
 // Returns [key] prefixed by [prefix].
