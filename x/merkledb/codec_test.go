@@ -252,14 +252,12 @@ func FuzzEncodeHashValues(f *testing.F) {
 						value:    value,
 					},
 				}
-				buf1 := &bytes.Buffer{}
-				buf2 := &bytes.Buffer{}
 				// Serialize the *hashValues with both codecs
-				codec1.encodeHashValues(buf1, hv)
-				codec2.encodeHashValues(buf2, hv)
+				hvBytes1 := codec1.encodeHashValues(hv)
+				hvBytes2 := codec2.encodeHashValues(hv)
 
 				// Make sure they're the same
-				require.Equal(buf1.Bytes(), buf2.Bytes())
+				require.Equal(hvBytes1, hvBytes2)
 			}
 		},
 	)

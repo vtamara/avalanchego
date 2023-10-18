@@ -4,7 +4,6 @@
 package merkledb
 
 import (
-	"crypto/sha256"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
@@ -89,11 +88,9 @@ func (n *node) calculateID(metrics merkleMetrics) {
 	if n.id != ids.Empty {
 		return
 	}
-
 	metrics.HashCalculated()
-	hasher := sha256.New()
-	codec.encodeHashValues(hasher, n)
-	n.id = ids.ID(hasher.Sum(nil))
+	hashBytes := codec.encodeHashValues(n)
+	n.id = ids.ID(hashing.ComputeHash256(hashBytes))
 }
 
 // Set [n]'s value to [val].

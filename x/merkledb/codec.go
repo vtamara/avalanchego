@@ -54,7 +54,7 @@ type encoder interface {
 	// Assumes [n] is non-nil.
 	encodeDBNode(n *dbNode) []byte
 	// Assumes [hv] is non-nil.
-	encodeHashValues(buff io.Writer, n *node)
+	encodeHashValues(n *node) []byte
 }
 
 type decoder interface {
@@ -69,6 +69,16 @@ func newCodec() encoderDecoder {
 // Note that bytes.Buffer.Write always returns nil so we
 // can ignore its return values in [codecImpl] methods.
 type codecImpl struct{}
+
+func (c *codecImpl) hashValuesSize(n *node) int {
+	// total is storing the node's value + the factor number of children pointers + the child entries for n.childCount children
+	total := maybeByteSliceSize(n.valueDigest) + uintSize(uint64(len(n.children))) + keySize(n.key)
+	// for each non-nil entry, we add the additional size of the child entry
+	for index, _ := range n.children {
+		total += uintSize(uint64(index)) + len(ids.Empty)
+	}
+	return total
+}
 
 func (c *codecImpl) dbNodeSize(n *dbNode) int {
 	// total is storing the node's value + the factor number of children pointers + the child entries for n.childCount children
@@ -128,7 +138,8 @@ func (c *codecImpl) encodeDBNode(n *dbNode) []byte {
 	return buf.Bytes()
 }
 
-func (c *codecImpl) encodeHashValues(buf io.Writer, n *node) {
+func (c *codecImpl) encodeHashValues(n *node) []byte {
+	buf := bytes.NewBuffer(make([]byte, c.hashValuesSize(n)))
 	c.encodeUint(buf, uint64(len(n.children)))
 
 	// ensure that the order of entries is consistent
@@ -141,6 +152,7 @@ func (c *codecImpl) encodeHashValues(buf io.Writer, n *node) {
 	}
 	c.encodeMaybeByteSlice(buf, n.valueDigest)
 	c.encodeKey(buf, n.key)
+	return buf.Bytes()
 }
 
 func (c *codecImpl) decodeDBNode(tc TokenConfiguration, b []byte, n *dbNode) error {
