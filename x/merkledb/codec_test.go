@@ -26,7 +26,7 @@ func FuzzCodecBool(f *testing.F) {
 			require := require.New(t)
 
 			codec := codec.(*codecImpl)
-			reader := bytes.NewReader(b)
+			reader := &sliceReader{data: b}
 			startLen := reader.Len()
 			got, err := codec.decodeBool(reader)
 			if err != nil {
@@ -54,7 +54,7 @@ func FuzzCodecInt(f *testing.F) {
 			require := require.New(t)
 
 			codec := codec.(*codecImpl)
-			reader := bytes.NewReader(b)
+			reader := &sliceReader{data: b}
 			startLen := reader.Len()
 			got, err := codec.decodeUint(reader)
 			if err != nil {
@@ -81,7 +81,7 @@ func FuzzCodecKey(f *testing.F) {
 		) {
 			require := require.New(t)
 			codec := codec.(*codecImpl)
-			reader := bytes.NewReader(b)
+			reader := &sliceReader{data: b}
 			startLen := reader.Len()
 			got, err := codec.decodeKey(reader)
 			if err != nil {
@@ -252,13 +252,14 @@ func FuzzEncodeHashValues(f *testing.F) {
 						value:    value,
 					},
 				}
-
+				buf1 := &bytes.Buffer{}
+				buf2 := &bytes.Buffer{}
 				// Serialize the *hashValues with both codecs
-				hvBytes1 := codec1.encodeHashValues(hv)
-				hvBytes2 := codec2.encodeHashValues(hv)
+				codec1.encodeHashValues(buf1, hv)
+				codec2.encodeHashValues(buf2, hv)
 
 				// Make sure they're the same
-				require.Equal(hvBytes1, hvBytes2)
+				require.Equal(buf1.Bytes(), buf2.Bytes())
 			}
 		},
 	)
@@ -266,7 +267,7 @@ func FuzzEncodeHashValues(f *testing.F) {
 
 func TestCodecDecodeKeyLengthOverflowRegression(t *testing.T) {
 	codec := codec.(*codecImpl)
-	bytes := bytes.NewReader(binary.AppendUvarint(nil, math.MaxInt))
+	bytes := &sliceReader{data: binary.AppendUvarint(nil, math.MaxInt)}
 	_, err := codec.decodeKey(bytes)
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 }

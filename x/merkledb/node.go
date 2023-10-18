@@ -4,6 +4,7 @@
 package merkledb
 
 import (
+	"crypto/sha256"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
@@ -13,13 +14,6 @@ import (
 )
 
 const HashLength = 32
-
-// the values that go into the node's id
-type hashValues struct {
-	Children map[byte]child
-	Value    maybe.Maybe[[]byte]
-	Key      Key
-}
 
 // Representation of a node stored in the database.
 type dbNode struct {
@@ -97,8 +91,9 @@ func (n *node) calculateID(metrics merkleMetrics) {
 	}
 
 	metrics.HashCalculated()
-	bytes := codec.encodeHashValues(n)
-	n.id = hashing.ComputeHash256Array(bytes)
+	hasher := sha256.New()
+	codec.encodeHashValues(hasher, n)
+	n.id = ids.ID(hasher.Sum(nil))
 }
 
 // Set [n]'s value to [val].
