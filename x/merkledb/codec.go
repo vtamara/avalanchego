@@ -75,15 +75,23 @@ func (c *codecImpl) dbNodeSize(n *dbNode) int {
 	total := maybeByteSliceSize(n.value) + uintSize(uint64(len(n.children)))
 	// for each non-nil entry, we add the additional size of the child entry
 	for index, entry := range n.children {
-		total += 1 + uintSize(uint64(index)) + len(ids.Empty) + keySize(entry.compressedKey)
+		total += childSize(index, entry)
 	}
 	return total
+}
+
+func childSize(index byte, childEntry child) int {
+	return uintSize(uint64(index)) + len(ids.Empty) + keySize(childEntry.compressedKey) + boolSize()
 }
 
 func maybeByteSliceSize(maybeValue maybe.Maybe[[]byte]) int {
 	if maybeValue.HasValue() {
 		return 1 + len(maybeValue.Value()) + uintSize(uint64(len(maybeValue.Value())))
 	}
+	return 1
+}
+
+func boolSize() int {
 	return 1
 }
 
