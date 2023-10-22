@@ -1,0 +1,17 @@
+// Copyright (C) 2019-2023, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
+package proxyvm
+
+import (
+	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/vms"
+)
+
+var _ vms.Factory = (*Factory)(nil)
+
+type Factory struct{}
+
+func (*Factory) New(logging.Logger) (interface{}, error) {
+	return &ProxyVM{}, nil
+}

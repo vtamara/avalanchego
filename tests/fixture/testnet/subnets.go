@@ -224,27 +224,11 @@ func CreateSubnet(
 
 	blockchainIDs := make([]ids.ID, len(spec.BlockchainSpecs))
 	for i, blockchainSpec := range spec.BlockchainSpecs {
-		if _, err := fmt.Fprintf(w, "creating a new blockchain on subnet %s\n", subnetID); err != nil {
+		blockchainID, err := CreateBlockchain(ctx, w, pWallet, subnetID, blockchainSpec, txTimeout)
+		if err != nil {
 			return nil, err
 		}
-		vmID, err := GetVMID(blockchainSpec.VMName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive VM ID from its name: %w", err)
-		}
-		ctx, cancel := context.WithTimeout(rootContext, txTimeout)
-		defer cancel()
-		createChainTx, err := pWallet.IssueCreateChainTx(
-			subnetID,
-			blockchainSpec.Genesis,
-			vmID,
-			nil,
-			blockchainSpec.VMName,
-			common.WithContext(ctx),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create blockchain: %w", err)
-		}
-		blockchainIDs[i] = createChainTx.ID()
+		blockchainIDs[i] = *blockchainID
 	}
 
 	if _, err := fmt.Fprintf(w, "creating nodes for subnet %s\n", subnetID); err != nil {
@@ -402,4 +386,28 @@ func waitForActiveValidators(w io.Writer, uri string, subnetID ids.ID, subnetDes
 		case <-ticker.C:
 		}
 	}
+}
+
+func CreateBlockchain(ctx context.Context, w io.Writer, pWallet p.Wallet, subnetID ids.ID, spec BlockchainSpec, txTimeout time.Duration) (*ids.ID, error) {
+	if _, err := fmt.Fprintf(w, "creating a new blockchain on subnet %s\n", subnetID); err != nil {
+		return nil, err
+	}
+	vmID, err := GetVMID(spec.VMName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to derive VM ID from its name: %w", err)
+	}
+	createCtx, cancel := context.WithTimeout(ctx, txTimeout)
+	defer cancel()
+	createChainTx, err := pWallet.IssueCreateChainTx(
+		subnetID,
+		spec.Genesis,
+		vmID,
+		nil,
+		spec.VMName,
+		common.WithContext(createCtx),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create blockchain: %w", err)
+	}
+	return &createChainTx.TxID, nil
 }
