@@ -29,9 +29,7 @@ type child struct {
 // node holds additional information on top of the dbNode that makes calculations easier to do
 type node struct {
 	dbNode
-	id          ids.ID
 	key         Key
-	nodeBytes   []byte
 	valueDigest maybe.Maybe[[]byte]
 }
 
@@ -53,9 +51,8 @@ func parseNode(tokenConfig TokenConfiguration, key Key, nodeBytes []byte) (*node
 		return nil, err
 	}
 	result := &node{
-		dbNode:    n,
-		key:       key,
-		nodeBytes: nodeBytes,
+		dbNode: n,
+		key:    key,
 	}
 
 	result.setValueDigest()
@@ -69,33 +66,18 @@ func (n *node) hasValue() bool {
 
 // Returns the byte representation of this node.
 func (n *node) bytes() []byte {
-	if n.nodeBytes == nil {
-		n.nodeBytes = codec.encodeDBNode(&n.dbNode)
-	}
-
-	return n.nodeBytes
-}
-
-// clear the cached values that will need to be recalculated whenever the node changes
-// for example, node ID and byte representation
-func (n *node) onNodeChanged() {
-	n.id = ids.Empty
-	n.nodeBytes = nil
+	return codec.encodeDBNode(&n.dbNode)
 }
 
 // Returns and caches the ID of this node.
-func (n *node) calculateID(metrics merkleMetrics) {
-	if n.id != ids.Empty {
-		return
-	}
+func (n *node) calculateID(metrics merkleMetrics) ids.ID {
 	metrics.HashCalculated()
 	hashBytes := codec.encodeHashValues(n)
-	n.id = ids.ID(hashing.ComputeHash256(hashBytes))
+	return ids.ID(hashing.ComputeHash256(hashBytes))
 }
 
 // Set [n]'s value to [val].
 func (n *node) setValue(val maybe.Maybe[[]byte]) {
-	n.onNodeChanged()
 	n.value = val
 	n.setValueDigest()
 }
@@ -117,7 +99,6 @@ func (n *node) addChild(tc TokenConfiguration, childNode *node) {
 		childNode.key.Token(tc, tokenLength),
 		child{
 			compressedKey: childNode.key.Skip(tc, tokenLength+1),
-			id:            childNode.id,
 			hasValue:      childNode.hasValue(),
 		},
 	)
@@ -125,13 +106,11 @@ func (n *node) addChild(tc TokenConfiguration, childNode *node) {
 
 // Adds a child to [n] without a reference to the child node.
 func (n *node) setChildEntry(index byte, childEntry child) {
-	n.onNodeChanged()
 	n.children[index] = childEntry
 }
 
 // Removes [child] from [n]'s children.
 func (n *node) removeChild(tc TokenConfiguration, child *node) {
-	n.onNodeChanged()
 	delete(n.children, child.key.Token(tc, tc.TokenLength(n.key)))
 }
 
@@ -141,14 +120,12 @@ func (n *node) removeChild(tc TokenConfiguration, child *node) {
 // it is safe to clone all fields because they are only written/read while one or both of the db locks are held
 func (n *node) clone() *node {
 	return &node{
-		id:  n.id,
 		key: n.key,
 		dbNode: dbNode{
 			value:    n.value,
 			children: maps.Clone(n.children),
 		},
 		valueDigest: n.valueDigest,
-		nodeBytes:   n.nodeBytes,
 	}
 }
 

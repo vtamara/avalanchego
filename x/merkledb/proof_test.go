@@ -151,7 +151,7 @@ func Test_RangeProof_Extra_Value(t *testing.T) {
 		db.tokenConfig,
 		maybe.Some([]byte{1}),
 		maybe.Some([]byte{5, 5}),
-		db.root.id,
+		db.rootID,
 	))
 
 	proof.KeyValues = append(proof.KeyValues, KeyValue{Key: []byte{5}, Value: []byte{5}})
@@ -161,7 +161,7 @@ func Test_RangeProof_Extra_Value(t *testing.T) {
 		db.tokenConfig,
 		maybe.Some([]byte{1}),
 		maybe.Some([]byte{5, 5}),
-		db.root.id,
+		db.rootID,
 	)
 	require.ErrorIs(err, ErrInvalidProof)
 }
@@ -537,7 +537,7 @@ func Test_RangeProof(t *testing.T) {
 		db.tokenConfig,
 		maybe.Some([]byte{1}),
 		maybe.Some([]byte{3, 5}),
-		db.root.id,
+		db.rootID,
 	))
 }
 
@@ -590,7 +590,7 @@ func Test_RangeProof_NilStart(t *testing.T) {
 		db.tokenConfig,
 		maybe.Nothing[[]byte](),
 		maybe.Some([]byte("key35")),
-		db.root.id,
+		db.rootID,
 	))
 }
 
@@ -625,7 +625,7 @@ func Test_RangeProof_NilEnd(t *testing.T) {
 		db.tokenConfig,
 		maybe.Some([]byte{1}),
 		maybe.Nothing[[]byte](),
-		db.root.id,
+		db.rootID,
 	))
 }
 
@@ -668,7 +668,7 @@ func Test_RangeProof_EmptyValues(t *testing.T) {
 		db.tokenConfig,
 		maybe.Some([]byte("key1")),
 		maybe.Some([]byte("key2")),
-		db.root.id,
+		db.rootID,
 	))
 }
 
