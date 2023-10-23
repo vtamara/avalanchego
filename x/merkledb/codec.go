@@ -132,14 +132,20 @@ func (c *codecImpl) encodeDBNode(n *dbNode) []byte {
 		entry := n.children[index]
 		c.encodeUint(buf, uint64(index))
 		c.encodeKey(buf, entry.compressedKey)
-		_, _ = buf.Write(entry.id[:])
+		c.encodeID(buf, entry.id)
 		c.encodeBool(buf, entry.hasValue)
 	}
 	return buf.Bytes()
 }
 
+func (c *codecImpl) encodeID(dst io.Writer, id ids.ID) {
+	for i := 0; i < len(ids.Empty); i++ {
+		dst.Write([]byte{id[i]})
+	}
+}
+
 func (c *codecImpl) encodeHashValues(n *node) []byte {
-	buf := bytes.NewBuffer(make([]byte, c.hashValuesSize(n)))
+	buf := bytes.NewBuffer(make([]byte, 0, c.hashValuesSize(n)))
 	c.encodeUint(buf, uint64(len(n.children)))
 
 	// ensure that the order of entries is consistent
@@ -148,7 +154,7 @@ func (c *codecImpl) encodeHashValues(n *node) []byte {
 	for _, index := range keys {
 		entry := n.children[index]
 		c.encodeUint(buf, uint64(index))
-		_, _ = buf.Write(entry.id[:])
+		c.encodeID(buf, entry.id)
 	}
 	c.encodeMaybeByteSlice(buf, n.valueDigest)
 	c.encodeKey(buf, n.key)
