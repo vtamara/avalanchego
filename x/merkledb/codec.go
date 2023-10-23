@@ -7,15 +7,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"io"
-	"math"
-	"sync"
-
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/maybe"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+	"io"
+	"math"
 )
 
 const (
@@ -28,14 +26,6 @@ const (
 	minByteSliceLen      = minVarIntLen
 	minDBNodeLen         = minMaybeByteSliceLen + minVarIntLen
 	minChildLen          = minVarIntLen + minKeyLen + ids.IDLen + boolLen
-
-	estimatedKeyLen           = 64
-	estimatedValueLen         = 64
-	estimatedCompressedKeyLen = 8
-	// Child index, child compressed key, child ID, child has value
-	estimatedNodeChildLen = minVarIntLen + estimatedCompressedKeyLen + ids.IDLen + boolLen
-	// Child index, child ID
-	hashValuesChildLen = minVarIntLen + ids.IDLen
 )
 
 var (
@@ -61,6 +51,7 @@ type encoderDecoder interface {
 }
 
 type encoder interface {
+	dbNodeSize(n *dbNode) int
 	// Assumes [n] is non-nil.
 	encodeDBNode(n *dbNode) []byte
 	// Assumes [hv] is non-nil.
@@ -73,33 +64,67 @@ type decoder interface {
 }
 
 func newCodec() encoderDecoder {
-	return &codecImpl{
-		varIntPool: sync.Pool{
-			New: func() interface{} {
-				return make([]byte, binary.MaxVarintLen64)
-			},
-		},
-	}
+	return &codecImpl{}
 }
 
 // Note that bytes.Buffer.Write always returns nil so we
 // can ignore its return values in [codecImpl] methods.
-type codecImpl struct {
-	// Invariant: Every byte slice returned by [varIntPool] has
-	// length [binary.MaxVarintLen64].
-	varIntPool sync.Pool
+type codecImpl struct{}
+
+func (c *codecImpl) hashValuesSize(n *node) int {
+	// total is storing the node's value + the factor number of children pointers + the child entries for n.childCount children
+	total := maybeByteSliceSize(n.valueDigest) + uintSize(uint64(len(n.children))) + keySize(n.key)
+	// for each non-nil entry, we add the additional size of the child entry
+	for index, _ := range n.children {
+		total += uintSize(uint64(index)) + len(ids.Empty)
+	}
+	return total
+}
+
+func (c *codecImpl) dbNodeSize(n *dbNode) int {
+	// total is storing the node's value + the factor number of children pointers + the child entries for n.childCount children
+	total := maybeByteSliceSize(n.value) + uintSize(uint64(len(n.children)))
+	// for each non-nil entry, we add the additional size of the child entry
+	for index, entry := range n.children {
+		total += childSize(index, entry)
+	}
+	return total
+}
+
+func childSize(index byte, childEntry child) int {
+	return uintSize(uint64(index)) + len(ids.Empty) + keySize(childEntry.compressedKey) + boolSize()
+}
+
+func maybeByteSliceSize(maybeValue maybe.Maybe[[]byte]) int {
+	if maybeValue.HasValue() {
+		return 1 + len(maybeValue.Value()) + uintSize(uint64(len(maybeValue.Value())))
+	}
+	return 1
+}
+
+func boolSize() int {
+	return 1
+}
+
+var log128 = math.Log(128)
+
+func uintSize(value uint64) int {
+	if value == 0 {
+		return 1
+	}
+	return 1 + int(math.Log(float64(value))/log128)
+}
+
+func keySize(p Key) int {
+	return uintSize(uint64(p.bitLength)) + bytesNeeded(p.bitLength)
 }
 
 func (c *codecImpl) encodeDBNode(n *dbNode) []byte {
-	var (
-		numChildren = len(n.children)
-		// Estimate size of [n] to prevent memory allocations
-		estimatedLen = estimatedValueLen + minVarIntLen + estimatedNodeChildLen*numChildren
-		buf          = bytes.NewBuffer(make([]byte, 0, estimatedLen))
-	)
+	startSize := c.dbNodeSize(n)
+	buf := bytes.NewBuffer(make([]byte, 0, startSize))
 
 	c.encodeMaybeByteSlice(buf, n.value)
-	c.encodeUint(buf, uint64(numChildren))
+	c.encodeUint(buf, uint64(len(n.children)))
 	// Note we insert children in order of increasing index
 	// for determinism.
 	keys := maps.Keys(n.children)
@@ -115,14 +140,8 @@ func (c *codecImpl) encodeDBNode(n *dbNode) []byte {
 }
 
 func (c *codecImpl) encodeHashValues(n *node) []byte {
-	var (
-		numChildren = len(n.children)
-		// Estimate size [hv] to prevent memory allocations
-		estimatedLen = minVarIntLen + numChildren*hashValuesChildLen + estimatedValueLen + estimatedKeyLen
-		buf          = bytes.NewBuffer(make([]byte, 0, estimatedLen))
-	)
-
-	c.encodeUint(buf, uint64(numChildren))
+	buf := bytes.NewBuffer(make([]byte, c.hashValuesSize(n)))
+	c.encodeUint(buf, uint64(len(n.children)))
 
 	// ensure that the order of entries is consistent
 	keys := maps.Keys(n.children)
@@ -134,7 +153,6 @@ func (c *codecImpl) encodeHashValues(n *node) []byte {
 	}
 	c.encodeMaybeByteSlice(buf, n.valueDigest)
 	c.encodeKey(buf, n.key)
-
 	return buf.Bytes()
 }
 
@@ -143,7 +161,7 @@ func (c *codecImpl) decodeDBNode(tc TokenConfiguration, b []byte, n *dbNode) err
 		return io.ErrUnexpectedEOF
 	}
 
-	src := bytes.NewReader(b)
+	src := &sliceReader{data: b}
 
 	value, err := c.decodeMaybeByteSlice(src)
 	if err != nil {
@@ -155,20 +173,19 @@ func (c *codecImpl) decodeDBNode(tc TokenConfiguration, b []byte, n *dbNode) err
 	switch {
 	case err != nil:
 		return err
-	case numChildren > uint64(tc.BranchFactor()):
+	case numChildren > uint64(tc.branchFactor):
 		return errTooManyChildren
 	case numChildren > uint64(src.Len()/minChildLen):
 		return io.ErrUnexpectedEOF
 	}
-
-	n.children = make(map[byte]child, tc.BranchFactor())
+	n.children = make(map[byte]child, int(numChildren))
 	var previousChild uint64
 	for i := uint64(0); i < numChildren; i++ {
 		index, err := c.decodeUint(src)
 		if err != nil {
 			return err
 		}
-		if index >= uint64(tc.BranchFactor()) || (i != 0 && index <= previousChild) {
+		if index >= uint64(tc.branchFactor) || (i != 0 && index <= previousChild) {
 			return errChildIndexTooLarge
 		}
 		previousChild = index
@@ -197,7 +214,7 @@ func (c *codecImpl) decodeDBNode(tc TokenConfiguration, b []byte, n *dbNode) err
 	return nil
 }
 
-func (*codecImpl) encodeBool(dst *bytes.Buffer, value bool) {
+func (*codecImpl) encodeBool(dst io.Writer, value bool) {
 	bytesValue := falseBytes
 	if value {
 		bytesValue = trueBytes
@@ -205,7 +222,7 @@ func (*codecImpl) encodeBool(dst *bytes.Buffer, value bool) {
 	_, _ = dst.Write(bytesValue)
 }
 
-func (*codecImpl) decodeBool(src *bytes.Reader) (bool, error) {
+func (*codecImpl) decodeBool(src *sliceReader) (bool, error) {
 	boolByte, err := src.ReadByte()
 	switch {
 	case err == io.EOF:
@@ -221,7 +238,7 @@ func (*codecImpl) decodeBool(src *bytes.Reader) (bool, error) {
 	}
 }
 
-func (*codecImpl) decodeUint(src *bytes.Reader) (uint64, error) {
+func (*codecImpl) decodeUint(src *sliceReader) (uint64, error) {
 	// To ensure encoding/decoding is canonical, we need to check for leading
 	// zeroes in the varint.
 	// The last byte of the varint we read is the most significant byte.
@@ -239,9 +256,7 @@ func (*codecImpl) decodeUint(src *bytes.Reader) (uint64, error) {
 
 	// Just 0x00 is a valid value so don't check if the varint is 1 byte
 	if startLen-endLen > 1 {
-		if err := src.UnreadByte(); err != nil {
-			return 0, err
-		}
+		src.UnreadByte()
 		lastByte, err := src.ReadByte()
 		if err != nil {
 			return 0, err
@@ -254,14 +269,20 @@ func (*codecImpl) decodeUint(src *bytes.Reader) (uint64, error) {
 	return val64, nil
 }
 
-func (c *codecImpl) encodeUint(dst *bytes.Buffer, value uint64) {
-	buf := c.varIntPool.Get().([]byte)
-	size := binary.PutUvarint(buf, value)
-	_, _ = dst.Write(buf[:size])
-	c.varIntPool.Put(buf)
+func (c *codecImpl) encodeUint(dst io.Writer, value uint64) error {
+	i := 0
+	for value >= 0x80 {
+		if _, err := dst.Write([]byte{byte(value | 0x80)}); err != nil {
+			return err
+		}
+		value >>= 7
+		i++
+	}
+	_, err := dst.Write([]byte{byte(value)})
+	return err
 }
 
-func (c *codecImpl) encodeMaybeByteSlice(dst *bytes.Buffer, maybeValue maybe.Maybe[[]byte]) {
+func (c *codecImpl) encodeMaybeByteSlice(dst io.Writer, maybeValue maybe.Maybe[[]byte]) {
 	hasValue := maybeValue.HasValue()
 	c.encodeBool(dst, hasValue)
 	if hasValue {
@@ -269,7 +290,7 @@ func (c *codecImpl) encodeMaybeByteSlice(dst *bytes.Buffer, maybeValue maybe.May
 	}
 }
 
-func (c *codecImpl) decodeMaybeByteSlice(src *bytes.Reader) (maybe.Maybe[[]byte], error) {
+func (c *codecImpl) decodeMaybeByteSlice(src *sliceReader) (maybe.Maybe[[]byte], error) {
 	if minMaybeByteSliceLen > src.Len() {
 		return maybe.Nothing[[]byte](), io.ErrUnexpectedEOF
 	}
@@ -286,7 +307,7 @@ func (c *codecImpl) decodeMaybeByteSlice(src *bytes.Reader) (maybe.Maybe[[]byte]
 	return maybe.Some(bytes), nil
 }
 
-func (c *codecImpl) decodeByteSlice(src *bytes.Reader) ([]byte, error) {
+func (c *codecImpl) decodeByteSlice(src *sliceReader) ([]byte, error) {
 	if minByteSliceLen > src.Len() {
 		return nil, io.ErrUnexpectedEOF
 	}
@@ -303,40 +324,34 @@ func (c *codecImpl) decodeByteSlice(src *bytes.Reader) ([]byte, error) {
 		return nil, io.ErrUnexpectedEOF
 	}
 
-	result := make([]byte, length)
-	_, err = io.ReadFull(src, result)
+	result, err := src.getSlice(int(length))
 	if err == io.EOF {
 		err = io.ErrUnexpectedEOF
 	}
 	return result, err
 }
 
-func (c *codecImpl) encodeByteSlice(dst *bytes.Buffer, value []byte) {
+func (c *codecImpl) encodeByteSlice(dst io.Writer, value []byte) {
 	c.encodeUint(dst, uint64(len(value)))
 	if value != nil {
 		_, _ = dst.Write(value)
 	}
 }
 
-func (*codecImpl) decodeID(src *bytes.Reader) (ids.ID, error) {
-	if ids.IDLen > src.Len() {
-		return ids.ID{}, io.ErrUnexpectedEOF
+func (*codecImpl) decodeID(src *sliceReader) (ids.ID, error) {
+	idBytes, err := src.getSlice(len(ids.Empty))
+	if err != nil {
+		return ids.Empty, err
 	}
-
-	var id ids.ID
-	_, err := io.ReadFull(src, id[:])
-	if err == io.EOF {
-		err = io.ErrUnexpectedEOF
-	}
-	return id, err
+	return ids.ID(idBytes), nil
 }
 
-func (c *codecImpl) encodeKey(dst *bytes.Buffer, key Key) {
+func (c *codecImpl) encodeKey(dst io.Writer, key Key) {
 	c.encodeUint(dst, uint64(key.bitLength))
 	_, _ = dst.Write(key.Bytes())
 }
 
-func (c *codecImpl) decodeKey(src *bytes.Reader) (Key, error) {
+func (c *codecImpl) decodeKey(src *sliceReader) (Key, error) {
 	if minKeyLen > src.Len() {
 		return Key{}, io.ErrUnexpectedEOF
 	}
@@ -354,8 +369,8 @@ func (c *codecImpl) decodeKey(src *bytes.Reader) (Key, error) {
 	if keyBytesLen > src.Len() {
 		return Key{}, io.ErrUnexpectedEOF
 	}
-	buffer := make([]byte, keyBytesLen)
-	if _, err := io.ReadFull(src, buffer); err != nil {
+	buffer, err := src.getSlice(keyBytesLen)
+	if err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
@@ -372,4 +387,34 @@ func (c *codecImpl) decodeKey(src *bytes.Reader) (Key, error) {
 	}
 	result.value = string(buffer)
 	return result, nil
+}
+
+type sliceReader struct {
+	data   []byte
+	offset int
+}
+
+func (sr *sliceReader) getSlice(length int) ([]byte, error) {
+	if sr.Len() < length {
+		return nil, io.ErrUnexpectedEOF
+	}
+	sr.offset += length
+	return sr.data[sr.offset-length : sr.offset], nil
+}
+
+func (sr *sliceReader) UnreadByte() {
+	sr.offset--
+}
+
+func (sr *sliceReader) ReadByte() (byte, error) {
+	if sr.Len() < 1 {
+		return 0, io.ErrUnexpectedEOF
+	}
+	val := sr.data[sr.offset]
+	sr.offset++
+	return val, nil
+}
+
+func (sr *sliceReader) Len() int {
+	return len(sr.data) - sr.offset
 }
