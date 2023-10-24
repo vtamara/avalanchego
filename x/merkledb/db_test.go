@@ -41,10 +41,10 @@ func newDB(ctx context.Context, db database.Database, config Config) (*merkleDB,
 
 func newDefaultConfig() Config {
 	return Config{
-		EvictionBatchSize:         10,
+		EvictionBatchSize:         2 * units.KiB,
 		HistoryLength:             defaultHistoryLength,
-		ValueNodeCacheSize:        units.MiB,
-		IntermediateNodeCacheSize: units.MiB,
+		ValueNodeCacheSize:        units.GiB,
+		IntermediateNodeCacheSize: units.GiB,
 		Reg:                       prometheus.NewRegistry(),
 		Tracer:                    trace.Noop,
 		TokenConfig:               BranchFactor16TokenConfig,
