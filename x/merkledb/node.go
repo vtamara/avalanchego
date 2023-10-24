@@ -20,7 +20,6 @@ type child struct {
 
 // node holds additional information on top of the dbNode that makes calculations easier to do
 type node struct {
-	id       ids.ID
 	key      Key
 	value    maybe.Maybe[[]byte]
 	children map[byte]*child
@@ -54,26 +53,15 @@ func (n *node) bytes() []byte {
 	return codec.encodeDBNode(n)
 }
 
-// clear the cached values that will need to be recalculated whenever the node changes
-// for example, node ID and byte representation
-func (n *node) onNodeChanged() {
-	n.id = ids.Empty
-}
-
 // Returns and caches the ID of this node.
 func (n *node) calculateID(metrics merkleMetrics) ids.ID {
-	if n.id == ids.Empty {
-		metrics.HashCalculated()
-		bytes := codec.encodeHashValues(n)
-		n.id = hashing.ComputeHash256Array(bytes)
-	}
-
-	return n.id
+	metrics.HashCalculated()
+	bytes := codec.encodeHashValues(n)
+	return hashing.ComputeHash256Array(bytes)
 }
 
 // Set [n]'s value to [val].
 func (n *node) setValue(val maybe.Maybe[[]byte]) {
-	n.onNodeChanged()
 	n.value = val
 }
 
@@ -85,7 +73,6 @@ func (n *node) addChild(tc TokenConfiguration, childNode *node) {
 		childNode.key.Token(n.key.length, tc.bitsPerToken),
 		&child{
 			compressedKey: childNode.key.Skip(n.key.length + tc.bitsPerToken),
-			id:            childNode.id,
 			hasValue:      childNode.hasValue(),
 		},
 	)
@@ -93,13 +80,11 @@ func (n *node) addChild(tc TokenConfiguration, childNode *node) {
 
 // Adds a child to [n] without a reference to the child node.
 func (n *node) setChildEntry(index byte, childEntry *child) {
-	n.onNodeChanged()
 	n.children[index] = childEntry
 }
 
 // Removes [child] from [n]'s children.
 func (n *node) removeChild(tc TokenConfiguration, child *node) {
-	n.onNodeChanged()
 	delete(n.children, child.key.Token(n.key.length, tc.bitsPerToken))
 }
 
@@ -109,7 +94,6 @@ func (n *node) removeChild(tc TokenConfiguration, child *node) {
 // it is safe to clone all fields because they are only written/read while one or both of the db locks are held
 func (n *node) clone() *node {
 	return &node{
-		id:       n.id,
 		key:      n.key,
 		value:    n.value,
 		children: maps.Clone(n.children),
