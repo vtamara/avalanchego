@@ -82,7 +82,7 @@ func Test_Insert(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		view, err := db.NewView(context.Background(), ViewChanges{BatchOps: valueToInsert, ConsumeBytes: true})
 		require.NoError(err)
-		view.GetMerkleRoot(context.Background())
+		require.NotNil(view.(*trieView).root)
 	}
 	require.NoError(db.Close())
 }

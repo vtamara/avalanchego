@@ -188,6 +188,17 @@ func newTrieView(
 			return nil, err
 		}
 	}
+	for key, change := range newView.changes.values {
+		if change.after.IsNothing() {
+			// Note we're setting [err] defined outside this function.
+			if err = newView.remove(key); err != nil {
+				return nil, err
+			}
+			// Note we're setting [err] defined outside this function.
+		} else if _, err = newView.insert(key, change.after); err != nil {
+			return nil, err
+		}
+	}
 	return newView, nil
 }
 
@@ -308,7 +319,7 @@ func (t *trieView) calculateNodeIDsHelper(n *node) {
 
 	for updatedChild := range updatedChildren {
 		index := updatedChild.key.Token(n.key.length, t.tokenConfig.bitsPerToken)
-		n.setChildEntry(index, child{
+		n.setChildEntry(index, &child{
 			compressedKey: n.children[index].compressedKey,
 			id:            updatedChild.id,
 			hasValue:      updatedChild.hasValue(),
@@ -695,7 +706,7 @@ func (t *trieView) compressNodePath(parent, node *node) error {
 	}
 
 	var (
-		childEntry child
+		childEntry *child
 		childKey   Key
 	)
 	// There is only one child, but we don't know the index.
@@ -710,7 +721,7 @@ func (t *trieView) compressNodePath(parent, node *node) error {
 	// [node] is the first node with multiple children.
 	// combine it with the [node] passed in.
 	parent.setChildEntry(childKey.Token(parent.key.length, t.tokenConfig.bitsPerToken),
-		child{
+		&child{
 			compressedKey: childKey.Skip(parent.key.length + t.tokenConfig.bitsPerToken),
 			id:            childEntry.id,
 			hasValue:      childEntry.hasValue,
@@ -864,7 +875,7 @@ func (t *trieView) insert(
 	// add the existing child onto the branch node
 	branchNode.setChildEntry(
 		existingChildEntry.compressedKey.Token(commonPrefixLength, t.tokenConfig.bitsPerToken),
-		child{
+		&child{
 			compressedKey: existingChildEntry.compressedKey.Skip(commonPrefixLength + t.tokenConfig.bitsPerToken),
 			id:            existingChildEntry.id,
 			hasValue:      existingChildEntry.hasValue,

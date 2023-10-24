@@ -109,13 +109,13 @@ func FuzzCodecDBNodeCanonical(f *testing.F) {
 			require := require.New(t)
 			for _, branchFactor := range validTokenConfigurations {
 				codec := codec.(*codecImpl)
-				node := &dbNode{}
-				if err := codec.decodeDBNode(branchFactor, b, node); err != nil {
+				n := &node{}
+				if err := codec.decodeDBNode(branchFactor, b, n); err != nil {
 					t.SkipNow()
 				}
 
 				// Encoding [node] should be the same as [b].
-				buf := codec.encodeDBNode(node)
+				buf := codec.encodeDBNode(n)
 				require.Equal(b, buf)
 			}
 		},
@@ -148,7 +148,7 @@ func FuzzCodecDBNodeDeterministic(f *testing.F) {
 
 				numChildren := r.Intn(tokenConfig.BranchFactor()) // #nosec G404
 
-				children := map[byte]child{}
+				children := map[byte]*child{}
 				for i := 0; i < numChildren; i++ {
 					var childID ids.ID
 					_, _ = r.Read(childID[:]) // #nosec G404
@@ -156,21 +156,21 @@ func FuzzCodecDBNodeDeterministic(f *testing.F) {
 					childKeyBytes := make([]byte, r.Intn(32)) // #nosec G404
 					_, _ = r.Read(childKeyBytes)              // #nosec G404
 
-					children[byte(i)] = child{
+					children[byte(i)] = &child{
 						compressedKey: ToKey(childKeyBytes),
 						id:            childID,
 					}
 				}
-				node := dbNode{
+				n := node{
 					value:    value,
 					children: children,
 				}
 
-				nodeBytes := codec.encodeDBNode(&node)
+				nodeBytes := codec.encodeDBNode(&n)
 
-				var gotNode dbNode
+				var gotNode node
 				require.NoError(codec.decodeDBNode(tokenConfig, nodeBytes, &gotNode))
-				require.Equal(node, gotNode)
+				require.Equal(n, gotNode)
 
 				nodeBytes2 := codec.encodeDBNode(&gotNode)
 				require.Equal(nodeBytes, nodeBytes2)
@@ -183,15 +183,15 @@ func TestCodecDecodeDBNode(t *testing.T) {
 	require := require.New(t)
 
 	var (
-		parsedDBNode  dbNode
+		parsedDBNode  node
 		tooShortBytes = make([]byte, minDBNodeLen-1)
 	)
 	err := codec.decodeDBNode(BranchFactor16TokenConfig, tooShortBytes, &parsedDBNode)
 	require.ErrorIs(err, io.ErrUnexpectedEOF)
 
-	proof := dbNode{
+	proof := node{
 		value:    maybe.Some([]byte{1}),
-		children: map[byte]child{},
+		children: map[byte]*child{},
 	}
 
 	nodeBytes := codec.encodeDBNode(&proof)
@@ -220,14 +220,14 @@ func FuzzEncodeHashValues(f *testing.F) {
 			for _, tokenConfig := range validTokenConfigurations { // Create a random *hashValues
 				r := rand.New(rand.NewSource(int64(randSeed))) // #nosec G404
 
-				children := map[byte]child{}
+				children := map[byte]*child{}
 				numChildren := r.Intn(tokenConfig.BranchFactor()) // #nosec G404
 				for i := 0; i < numChildren; i++ {
 					compressedKeyLen := r.Intn(32) // #nosec G404
 					compressedKeyBytes := make([]byte, compressedKeyLen)
 					_, _ = r.Read(compressedKeyBytes) // #nosec G404
 
-					children[byte(i)] = child{
+					children[byte(i)] = &child{
 						compressedKey: ToKey(compressedKeyBytes),
 						id:            ids.GenerateTestID(),
 						hasValue:      r.Intn(2) == 1, // #nosec G404
@@ -246,11 +246,9 @@ func FuzzEncodeHashValues(f *testing.F) {
 				_, _ = r.Read(key)              // #nosec G404
 
 				hv := &node{
-					key: ToKey(key),
-					dbNode: dbNode{
-						children: children,
-						value:    value,
-					},
+					key:      ToKey(key),
+					children: children,
+					value:    value,
 				}
 
 				// Serialize the *hashValues with both codecs

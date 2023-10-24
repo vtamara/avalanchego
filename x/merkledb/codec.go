@@ -7,12 +7,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"io"
-	"math"
-	"sync"
-
+	"github.com/ava-labs/avalanchego/utils/hashing"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
+	"io"
+	"math"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/maybe"
@@ -62,35 +61,26 @@ type encoderDecoder interface {
 
 type encoder interface {
 	// Assumes [n] is non-nil.
-	encodeDBNode(n *dbNode) []byte
+	encodeDBNode(n *node) []byte
 	// Assumes [hv] is non-nil.
 	encodeHashValues(n *node) []byte
 }
 
 type decoder interface {
 	// Assumes [n] is non-nil.
-	decodeDBNode(tc TokenConfiguration, bytes []byte, n *dbNode) error
+	decodeDBNode(tc TokenConfiguration, bytes []byte, n *node) error
 }
 
 func newCodec() encoderDecoder {
-	return &codecImpl{
-		varIntPool: sync.Pool{
-			New: func() interface{} {
-				return make([]byte, binary.MaxVarintLen64)
-			},
-		},
-	}
+	return &codecImpl{}
 }
 
 // Note that bytes.Buffer.Write always returns nil so we
 // can ignore its return values in [codecImpl] methods.
 type codecImpl struct {
-	// Invariant: Every byte slice returned by [varIntPool] has
-	// length [binary.MaxVarintLen64].
-	varIntPool sync.Pool
 }
 
-func (c *codecImpl) encodeDBNode(n *dbNode) []byte {
+func (c *codecImpl) encodeDBNode(n *node) []byte {
 	var (
 		numChildren = len(n.children)
 		// Estimate size of [n] to prevent memory allocations
@@ -132,13 +122,17 @@ func (c *codecImpl) encodeHashValues(n *node) []byte {
 		c.encodeUint(buf, uint64(index))
 		_, _ = buf.Write(entry.id[:])
 	}
-	c.encodeMaybeByteSlice(buf, n.valueDigest)
+	val := n.value
+	if n.value.HasValue() && len(n.value.Value()) >= HashLength {
+		val = maybe.Some(hashing.ComputeHash256(n.value.Value()))
+	}
+	c.encodeMaybeByteSlice(buf, val)
 	c.encodeKey(buf, n.key)
 
 	return buf.Bytes()
 }
 
-func (c *codecImpl) decodeDBNode(tc TokenConfiguration, b []byte, n *dbNode) error {
+func (c *codecImpl) decodeDBNode(tc TokenConfiguration, b []byte, n *node) error {
 	if minDBNodeLen > len(b) {
 		return io.ErrUnexpectedEOF
 	}
@@ -161,7 +155,7 @@ func (c *codecImpl) decodeDBNode(tc TokenConfiguration, b []byte, n *dbNode) err
 		return io.ErrUnexpectedEOF
 	}
 
-	n.children = make(map[byte]child, tc.BranchFactor())
+	n.children = make(map[byte]*child, numChildren)
 	var previousChild uint64
 	for i := uint64(0); i < numChildren; i++ {
 		index, err := c.decodeUint(src)
@@ -185,7 +179,7 @@ func (c *codecImpl) decodeDBNode(tc TokenConfiguration, b []byte, n *dbNode) err
 		if err != nil {
 			return err
 		}
-		n.children[byte(index)] = child{
+		n.children[byte(index)] = &child{
 			compressedKey: compressedKey,
 			id:            childID,
 			hasValue:      hasValue,
@@ -254,11 +248,17 @@ func (*codecImpl) decodeUint(src *bytes.Reader) (uint64, error) {
 	return val64, nil
 }
 
-func (c *codecImpl) encodeUint(dst *bytes.Buffer, value uint64) {
-	buf := c.varIntPool.Get().([]byte)
-	size := binary.PutUvarint(buf, value)
-	_, _ = dst.Write(buf[:size])
-	c.varIntPool.Put(buf)
+func (c *codecImpl) encodeUint(dst io.Writer, value uint64) error {
+	i := 0
+	for value >= 0x80 {
+		if _, err := dst.Write([]byte{byte(value | 0x80)}); err != nil {
+			return err
+		}
+		value >>= 7
+		i++
+	}
+	_, err := dst.Write([]byte{byte(value)})
+	return err
 }
 
 func (c *codecImpl) encodeMaybeByteSlice(dst *bytes.Buffer, maybeValue maybe.Maybe[[]byte]) {
