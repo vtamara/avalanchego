@@ -40,7 +40,7 @@ type ReadOnlyTrie interface {
 
 	// get an editable copy of the node with the given key path
 	// hasValue indicates which db to look in (value or intermediate)
-	getEditableNode(key Key, hasValue bool) (*node, error)
+	getNode(key Key, hasValue bool) (*node, error)
 
 	// GetRangeProof returns a proof of up to [maxLength] key-value pairs with
 	// keys in range [start, end].

@@ -147,7 +147,7 @@ func newTrieView(
 	parentTrie TrieView,
 	changes ViewChanges,
 ) (*trieView, error) {
-	root, err := parentTrie.getEditableNode(Key{}, false /* hasValue */)
+	root, err := parentTrie.getNode(Key{}, false /* hasValue */)
 	if err != nil {
 		if err == database.ErrNotFound {
 			return nil, ErrNoValidRoot
@@ -382,7 +382,7 @@ func (t *trieView) getProof(ctx context.Context, key []byte) (*Proof, error) {
 		return proof, nil
 	}
 
-	childNode, err := t.getNode(
+	childNode, err := t.getNodeInternal(
 		closestNode.key.AppendExtend(t.tokenConfig.ToToken(nextIndex), child.compressedKey),
 		child.hasValue,
 	)
@@ -636,7 +636,7 @@ func (t *trieView) remove(key Key) error {
 	}
 
 	// confirm a node exists with a value
-	keyNode, err := t.getNode(key, true)
+	keyNode, err := t.getNodeInternal(key, true)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			// key didn't exist
@@ -756,7 +756,7 @@ func (t *trieView) visitPathToKey(key Key, visitNode func(*node) error) error {
 			return nil
 		}
 		// grab the next node along the path
-		currentNode, err = t.getNode(key.Take(currentNode.key.length+t.tokenConfig.bitsPerToken+nextChildEntry.compressedKey.length), nextChildEntry.hasValue)
+		currentNode, err = t.getNodeInternal(key.Take(currentNode.key.length+t.tokenConfig.bitsPerToken+nextChildEntry.compressedKey.length), nextChildEntry.hasValue)
 		if err != nil {
 			return err
 		}
@@ -778,13 +778,13 @@ func getLengthOfCommonPrefix(first, second Key, secondOffset int, tokenBitSize i
 
 // Get a copy of the node matching the passed key from the trie.
 // Used by views to get nodes from their ancestors.
-func (t *trieView) getEditableNode(key Key, hadValue bool) (*node, error) {
+func (t *trieView) getNode(key Key, hadValue bool) (*node, error) {
 	if t.isInvalid() {
 		return nil, ErrInvalid
 	}
 
 	// grab the node in question
-	n, err := t.getNode(key, hadValue)
+	n, err := t.getNodeInternal(key, hadValue)
 	if err != nil {
 		return nil, err
 	}
@@ -795,7 +795,7 @@ func (t *trieView) getEditableNode(key Key, hadValue bool) (*node, error) {
 	}
 
 	// return a clone of the node, so it can be edited without affecting this trie
-	return n.clone(), nil
+	return n, nil
 }
 
 // insert a key/value pair into the correct node of the trie.
@@ -929,7 +929,7 @@ func (t *trieView) recordKeyChange(key Key, after *node, hadValue bool, newNode 
 		return nil
 	}
 
-	before, err := t.getParentTrie().getEditableNode(key, hadValue)
+	before, err := t.getParentTrie().getNode(key, hadValue)
 	if err != nil && err != database.ErrNotFound {
 		return err
 	}
@@ -979,7 +979,7 @@ func (t *trieView) recordValueChange(key Key, value maybe.Maybe[[]byte]) error {
 // sets the node's ID to [id].
 // If the node is loaded from the baseDB, [hasValue] determines which database the node is stored in.
 // Returns database.ErrNotFound if the node doesn't exist.
-func (t *trieView) getNode(key Key, hasValue bool) (*node, error) {
+func (t *trieView) getNodeInternal(key Key, hasValue bool) (*node, error) {
 	// check for the key within the changed nodes
 	if nodeChange, isChanged := t.changes.nodes[key]; isChanged {
 		t.db.metrics.ViewNodeCacheHit()
@@ -990,12 +990,12 @@ func (t *trieView) getNode(key Key, hasValue bool) (*node, error) {
 	}
 
 	// get the node from the parent trie and store a local copy
-	parentTrieNode, err := t.getParentTrie().getEditableNode(key, hasValue)
+	parentTrieNode, err := t.getParentTrie().getNode(key, hasValue)
 	if err != nil {
 		return nil, err
 	}
 
-	return parentTrieNode, nil
+	return parentTrieNode.clone(), nil
 }
 
 // Get the parent trie of the view
