@@ -134,6 +134,7 @@ var _ = ginkgo.Describe("[Staking Rewards]", func() {
 					Addrs:     []ids.ShortID{alphaDelegationRewardKey.Address()},
 				},
 				delegationShare,
+				e2e.WithDefaultContext(),
 			)
 			require.NoError(err)
 		})
@@ -164,6 +165,7 @@ var _ = ginkgo.Describe("[Staking Rewards]", func() {
 					Addrs:     []ids.ShortID{betaDelegationRewardKey.Address()},
 				},
 				delegationShare,
+				e2e.WithDefaultContext(),
 			)
 			require.NoError(err)
 		})
@@ -187,6 +189,7 @@ var _ = ginkgo.Describe("[Staking Rewards]", func() {
 					Threshold: 1,
 					Addrs:     []ids.ShortID{gammaDelegationRewardKey.Address()},
 				},
+				e2e.WithDefaultContext(),
 			)
 			require.NoError(err)
 		})
@@ -210,6 +213,7 @@ var _ = ginkgo.Describe("[Staking Rewards]", func() {
 					Threshold: 1,
 					Addrs:     []ids.ShortID{deltaDelegationRewardKey.Address()},
 				},
+				e2e.WithDefaultContext(),
 			)
 			require.NoError(err)
 		})

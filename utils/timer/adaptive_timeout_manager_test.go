@@ -21,7 +21,7 @@ func TestAdaptiveTimeoutManagerInit(t *testing.T) {
 		expectedErr error
 	}
 
-	tests := []test{
+	tests := []*test{
 		{
 			config: AdaptiveTimeoutConfig{
 				InitialTimeout:     time.Second,
@@ -83,7 +83,7 @@ func TestAdaptiveTimeoutManagerInit(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		_, err := NewAdaptiveTimeoutManager(&test.config, "", prometheus.NewRegistry())
+		_, err := NewAdaptiveTimeoutManager(&test.config, "", prometheus.NewRegistry()) //nolint:gosec
 		require.ErrorIs(t, err, test.expectedErr)
 	}
 }

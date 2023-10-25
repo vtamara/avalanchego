@@ -144,7 +144,7 @@ func newEnvironment(t *testing.T, ctrl *gomock.Controller) *environment {
 
 	if ctrl == nil {
 		res.state = defaultState(res.config, res.ctx, res.baseDB, rewardsCalc)
-		res.uptimes = uptime.NewManager(res.state)
+		res.uptimes = uptime.NewManager(res.state, res.clk)
 		res.utxosHandler = utxo.NewHandler(res.ctx, res.clk, res.fx)
 		res.txBuilder = p_tx_builder.New(
 			res.ctx,
@@ -158,7 +158,7 @@ func newEnvironment(t *testing.T, ctrl *gomock.Controller) *environment {
 	} else {
 		genesisBlkID = ids.GenerateTestID()
 		res.mockedState = state.NewMockState(ctrl)
-		res.uptimes = uptime.NewManager(res.mockedState)
+		res.uptimes = uptime.NewManager(res.mockedState, res.clk)
 		res.utxosHandler = utxo.NewHandler(res.ctx, res.clk, res.fx)
 		res.txBuilder = p_tx_builder.New(
 			res.ctx,
@@ -322,13 +322,10 @@ func defaultCtx(db database.Database) *snow.Context {
 }
 
 func defaultConfig() *config.Config {
-	vdrs := validators.NewManager()
-	primaryVdrs := validators.NewSet()
-	_ = vdrs.Add(constants.PrimaryNetworkID, primaryVdrs)
 	return &config.Config{
 		Chains:                 chains.TestManager,
 		UptimeLockedCalculator: uptime.NewLockedCalculator(),
-		Validators:             vdrs,
+		Validators:             validators.NewManager(),
 		TxFee:                  defaultTxFee,
 		CreateSubnetTxFee:      100 * defaultTxFee,
 		CreateBlockchainTxFee:  100 * defaultTxFee,
@@ -462,10 +459,7 @@ func shutdownEnvironment(t *environment) error {
 	}
 
 	if t.isBootstrapped.Get() {
-		validatorIDs, err := validators.NodeIDs(t.config.Validators, constants.PrimaryNetworkID)
-		if err != nil {
-			return err
-		}
+		validatorIDs := t.config.Validators.GetValidatorIDs(constants.PrimaryNetworkID)
 
 		if err := t.uptimes.StopTracking(validatorIDs, constants.PrimaryNetworkID); err != nil {
 			return err

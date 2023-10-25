@@ -5,6 +5,7 @@ package indexer
 
 import (
 	"errors"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -18,7 +19,6 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/engine/avalanche/vertex"
-	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block/mocks"
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -36,7 +36,7 @@ type apiServerMock struct {
 	endpoints   []string
 }
 
-func (a *apiServerMock) AddRoute(_ *common.HTTPHandler, _ *sync.RWMutex, base, endpoint string) error {
+func (a *apiServerMock) AddRoute(_ http.Handler, base, endpoint string) error {
 	a.timesCalled++
 	a.bases = append(a.bases, base)
 	a.endpoints = append(a.endpoints, endpoint)

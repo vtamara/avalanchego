@@ -145,7 +145,7 @@ type ChainParameters struct {
 	// The IDs of the feature extensions this chain is running.
 	FxIDs []ids.ID
 	// Invariant: Only used when [ID] is the P-chain ID.
-	CustomBeacons validators.Set
+	CustomBeacons validators.Manager
 }
 
 type chain struct {
@@ -153,7 +153,7 @@ type chain struct {
 	Context *snow.ConsensusContext
 	VM      common.VM
 	Handler handler.Handler
-	Beacons validators.Set
+	Beacons validators.Manager
 }
 
 // ChainConfig is configuration settings for the current execution.
@@ -241,8 +241,11 @@ type manager struct {
 	// queue that holds chain create requests
 	chainsQueue buffer.BlockingDeque[ChainParameters]
 	// unblocks chain creator to start processing the queue
-	unblockChainCreatorCh  chan struct{}
+	unblockChainCreatorCh chan struct{}
+	// shutdown the chain creator goroutine if the queue hasn't started to be
+	// processed.
 	chainCreatorShutdownCh chan struct{}
+	chainCreatorExited     sync.WaitGroup
 
 	subnetsLock sync.RWMutex
 	// Key: Subnet's ID
@@ -525,24 +528,13 @@ func (m *manager) buildChain(chainParams ChainParameters, sb subnets.Subnet) (*c
 		}
 	}
 
-	var vdrs validators.Set // Validators validating this blockchain
-	var hasValidators bool
-	if m.SybilProtectionEnabled {
-		vdrs, hasValidators = m.Validators.Get(chainParams.SubnetID)
-	} else { // Sybil protection is disabled. Every peer validates every subnet.
-		vdrs, hasValidators = m.Validators.Get(constants.PrimaryNetworkID)
-	}
-	if !hasValidators {
-		return nil, fmt.Errorf("couldn't get validator set of subnet with ID %s. The subnet may not exist", chainParams.SubnetID)
-	}
-
 	var chain *chain
 	switch vm := vm.(type) {
 	case vertex.LinearizableVMWithEngine:
 		chain, err = m.createAvalancheChain(
 			ctx,
 			chainParams.GenesisData,
-			vdrs,
+			m.Validators,
 			vm,
 			fxs,
 			sb,
@@ -551,7 +543,7 @@ func (m *manager) buildChain(chainParams ChainParameters, sb subnets.Subnet) (*c
 			return nil, fmt.Errorf("error while creating new avalanche vm %w", err)
 		}
 	case block.ChainVM:
-		beacons := vdrs
+		beacons := m.Validators
 		if chainParams.ID == constants.PlatformChainID {
 			beacons = chainParams.CustomBeacons
 		}
@@ -559,7 +551,7 @@ func (m *manager) buildChain(chainParams ChainParameters, sb subnets.Subnet) (*c
 		chain, err = m.createSnowmanChain(
 			ctx,
 			chainParams.GenesisData,
-			vdrs,
+			m.Validators,
 			beacons,
 			vm,
 			fxs,
@@ -588,7 +580,7 @@ func (m *manager) AddRegistrant(r Registrant) {
 func (m *manager) createAvalancheChain(
 	ctx *snow.ConsensusContext,
 	genesisData []byte,
-	vdrs validators.Set,
+	vdrs validators.Manager,
 	vm vertex.LinearizableVMWithEngine,
 	fxs []*common.Fx,
 	sb subnets.Subnet,
@@ -810,7 +802,10 @@ func (m *manager) createAvalancheChain(
 		appSender:    snowmanMessageSender,
 	}
 
-	bootstrapWeight := vdrs.Weight()
+	bootstrapWeight, err := vdrs.TotalWeight(ctx.SubnetID)
+	if err != nil {
+		return nil, fmt.Errorf("error while fetching weight for subnet %s: %w", ctx.SubnetID, err)
+	}
 
 	consensusParams := sb.Config().ConsensusParameters
 	sampleK := consensusParams.K
@@ -822,7 +817,7 @@ func (m *manager) createAvalancheChain(
 	if err != nil {
 		return nil, fmt.Errorf("error creating peer tracker: %w", err)
 	}
-	vdrs.RegisterCallbackListener(connectedValidators)
+	vdrs.RegisterCallbackListener(ctx.SubnetID, connectedValidators)
 
 	// Asynchronously passes messages from the network to the consensus engine
 	h, err := handler.New(
@@ -842,7 +837,7 @@ func (m *manager) createAvalancheChain(
 
 	connectedBeacons := tracker.NewPeers()
 	startupTracker := tracker.NewStartup(connectedBeacons, (3*bootstrapWeight+3)/4)
-	vdrs.RegisterCallbackListener(startupTracker)
+	vdrs.RegisterCallbackListener(ctx.SubnetID, startupTracker)
 
 	snowmanCommonCfg := common.Config{
 		Ctx:                            ctx,
@@ -992,8 +987,8 @@ func (m *manager) createAvalancheChain(
 func (m *manager) createSnowmanChain(
 	ctx *snow.ConsensusContext,
 	genesisData []byte,
-	vdrs validators.Set,
-	beacons validators.Set,
+	vdrs validators.Manager,
+	beacons validators.Manager,
 	vm block.ChainVM,
 	fxs []*common.Fx,
 	sb subnets.Subnet,
@@ -1158,7 +1153,10 @@ func (m *manager) createSnowmanChain(
 		return nil, err
 	}
 
-	bootstrapWeight := beacons.Weight()
+	bootstrapWeight, err := beacons.TotalWeight(ctx.SubnetID)
+	if err != nil {
+		return nil, fmt.Errorf("error while fetching weight for subnet %s: %w", ctx.SubnetID, err)
+	}
 
 	consensusParams := sb.Config().ConsensusParameters
 	sampleK := consensusParams.K
@@ -1170,7 +1168,7 @@ func (m *manager) createSnowmanChain(
 	if err != nil {
 		return nil, fmt.Errorf("error creating peer tracker: %w", err)
 	}
-	vdrs.RegisterCallbackListener(connectedValidators)
+	vdrs.RegisterCallbackListener(ctx.SubnetID, connectedValidators)
 
 	// Asynchronously passes messages from the network to the consensus engine
 	h, err := handler.New(
@@ -1190,7 +1188,7 @@ func (m *manager) createSnowmanChain(
 
 	connectedBeacons := tracker.NewPeers()
 	startupTracker := tracker.NewStartup(connectedBeacons, (3*bootstrapWeight+3)/4)
-	beacons.RegisterCallbackListener(startupTracker)
+	beacons.RegisterCallbackListener(ctx.SubnetID, startupTracker)
 
 	commonCfg := common.Config{
 		Ctx:                            ctx,
@@ -1352,7 +1350,7 @@ func (m *manager) registerBootstrappedHealthChecks() error {
 		if !m.IsBootstrapped(constants.PlatformChainID) {
 			return "node is currently bootstrapping", nil
 		}
-		if !validators.Contains(m.Validators, constants.PrimaryNetworkID, m.NodeID) {
+		if _, ok := m.Validators.GetValidator(constants.PrimaryNetworkID, m.NodeID); !ok {
 			return "node is not a primary network validator", nil
 		}
 
@@ -1390,11 +1388,14 @@ func (m *manager) StartChainCreator(platformParams ChainParameters) error {
 	m.createChain(platformParams)
 
 	m.Log.Info("starting chain creator")
+	m.chainCreatorExited.Add(1)
 	go m.dispatchChainCreator()
 	return nil
 }
 
 func (m *manager) dispatchChainCreator() {
+	defer m.chainCreatorExited.Done()
+
 	select {
 	// This channel will be closed when Shutdown is called on the manager.
 	case <-m.chainCreatorShutdownCh:
@@ -1416,16 +1417,11 @@ func (m *manager) dispatchChainCreator() {
 }
 
 // Shutdown stops all the chains
-func (m *manager) closeChainCreator() {
-	m.Log.Info("stopping chain creator")
-	m.chainsQueue.Close()
-	close(m.chainCreatorShutdownCh)
-}
-
-// Shutdown stops all the chains
 func (m *manager) Shutdown() {
 	m.Log.Info("shutting down chain manager")
-	m.closeChainCreator()
+	m.chainsQueue.Close()
+	close(m.chainCreatorShutdownCh)
+	m.chainCreatorExited.Wait()
 	m.ManagerConfig.Router.Shutdown(context.TODO())
 }
 

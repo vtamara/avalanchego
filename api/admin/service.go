@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"path"
+	"sync"
 
 	"github.com/gorilla/rpc/v2"
 	"go.uber.org/zap"
@@ -15,7 +16,6 @@ import (
 	"github.com/ava-labs/avalanchego/api/server"
 	"github.com/ava-labs/avalanchego/chains"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/json"
@@ -52,23 +52,24 @@ type Config struct {
 // Admin is the API service for node admin management
 type Admin struct {
 	Config
+	lock     sync.RWMutex
 	profiler profiler.Profiler
 }
 
 // NewService returns a new admin API service.
 // All of the fields in [config] must be set.
-func NewService(config Config) (*common.HTTPHandler, error) {
-	newServer := rpc.NewServer()
+func NewService(config Config) (http.Handler, error) {
+	server := rpc.NewServer()
 	codec := json.NewCodec()
-	newServer.RegisterCodec(codec, "application/json")
-	newServer.RegisterCodec(codec, "application/json;charset=UTF-8")
-	if err := newServer.RegisterService(&Admin{
-		Config:   config,
-		profiler: profiler.New(config.ProfileDir),
-	}, "admin"); err != nil {
-		return nil, err
-	}
-	return &common.HTTPHandler{Handler: newServer}, nil
+	server.RegisterCodec(codec, "application/json")
+	server.RegisterCodec(codec, "application/json;charset=UTF-8")
+	return server, server.RegisterService(
+		&Admin{
+			Config:   config,
+			profiler: profiler.New(config.ProfileDir),
+		},
+		"admin",
+	)
 }
 
 // StartCPUProfiler starts a cpu profile writing to the specified file
@@ -77,6 +78,9 @@ func (a *Admin) StartCPUProfiler(_ *http.Request, _ *struct{}, _ *api.EmptyReply
 		zap.String("service", "admin"),
 		zap.String("method", "startCPUProfiler"),
 	)
+
+	a.lock.Lock()
+	defer a.lock.Unlock()
 
 	return a.profiler.StartCPUProfiler()
 }
@@ -88,6 +92,9 @@ func (a *Admin) StopCPUProfiler(_ *http.Request, _ *struct{}, _ *api.EmptyReply)
 		zap.String("method", "stopCPUProfiler"),
 	)
 
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
 	return a.profiler.StopCPUProfiler()
 }
 
@@ -98,6 +105,9 @@ func (a *Admin) MemoryProfile(_ *http.Request, _ *struct{}, _ *api.EmptyReply) e
 		zap.String("method", "memoryProfile"),
 	)
 
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
 	return a.profiler.MemoryProfile()
 }
 
@@ -107,6 +117,9 @@ func (a *Admin) LockProfile(_ *http.Request, _ *struct{}, _ *api.EmptyReply) err
 		zap.String("service", "admin"),
 		zap.String("method", "lockProfile"),
 	)
+
+	a.lock.Lock()
+	defer a.lock.Unlock()
 
 	return a.profiler.LockProfile()
 }
@@ -156,6 +169,9 @@ func (a *Admin) AliasChain(_ *http.Request, args *AliasChainArgs, _ *api.EmptyRe
 		return err
 	}
 
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
 	if err := a.ChainManager.Alias(chainID, args.Alias); err != nil {
 		return err
 	}
@@ -200,6 +216,10 @@ func (a *Admin) Stacktrace(_ *http.Request, _ *struct{}, _ *api.EmptyReply) erro
 	)
 
 	stacktrace := []byte(utils.GetStacktrace(true))
+
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
 	return perms.WriteFile(stacktraceFile, stacktrace, perms.ReadWrite)
 }
 
@@ -231,6 +251,9 @@ func (a *Admin) SetLoggerLevel(_ *http.Request, args *SetLoggerLevelArgs, _ *api
 	if args.LogLevel == nil && args.DisplayLevel == nil {
 		return errNoLogLevel
 	}
+
+	a.lock.Lock()
+	defer a.lock.Unlock()
 
 	var loggerNames []string
 	if len(args.LoggerName) > 0 {
@@ -277,6 +300,10 @@ func (a *Admin) GetLoggerLevel(_ *http.Request, args *GetLoggerLevelArgs, reply 
 		zap.String("method", "getLoggerLevels"),
 		logging.UserString("loggerName", args.LoggerName),
 	)
+
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+
 	reply.LoggerLevels = make(map[string]LogAndDisplayLevels)
 	var loggerNames []string
 	// Empty name means all loggers
@@ -327,6 +354,9 @@ func (a *Admin) LoadVMs(r *http.Request, _ *struct{}, reply *LoadVMsReply) error
 		zap.String("service", "admin"),
 		zap.String("method", "loadVMs"),
 	)
+
+	a.lock.Lock()
+	defer a.lock.Unlock()
 
 	ctx := r.Context()
 	loadedVMs, failedVMs, err := a.VMRegistry.ReloadWithReadLock(ctx)

@@ -23,18 +23,26 @@ type valueNodeDB struct {
 
 	// If a value is nil, the corresponding key isn't in the trie.
 	// Paths in [nodeCache] aren't prefixed with [valueNodePrefix].
-	nodeCache cache.Cacher[path, *node]
+	nodeCache cache.Cacher[Key, *node]
 	metrics   merkleMetrics
 
-	closed utils.Atomic[bool]
+	closed       utils.Atomic[bool]
+	branchFactor BranchFactor
 }
 
-func newValueNodeDB(db database.Database, bufferPool *sync.Pool, metrics merkleMetrics, size int) *valueNodeDB {
+func newValueNodeDB(
+	db database.Database,
+	bufferPool *sync.Pool,
+	metrics merkleMetrics,
+	cacheSize int,
+	branchFactor BranchFactor,
+) *valueNodeDB {
 	return &valueNodeDB{
-		metrics:    metrics,
-		baseDB:     db,
-		bufferPool: bufferPool,
-		nodeCache:  cache.NewSizedLRU(size, cacheEntrySize),
+		metrics:      metrics,
+		baseDB:       db,
+		bufferPool:   bufferPool,
+		nodeCache:    cache.NewSizedLRU(cacheSize, cacheEntrySize),
+		branchFactor: branchFactor,
 	}
 }
 
@@ -57,11 +65,11 @@ func (db *valueNodeDB) Close() {
 func (db *valueNodeDB) NewBatch() *valueNodeBatch {
 	return &valueNodeBatch{
 		db:  db,
-		ops: make(map[path]*node, defaultBufferLength),
+		ops: make(map[Key]*node, defaultBufferLength),
 	}
 }
 
-func (db *valueNodeDB) Get(key path) (*node, error) {
+func (db *valueNodeDB) Get(key Key) (*node, error) {
 	if cachedValue, isCached := db.nodeCache.Get(key); isCached {
 		db.metrics.ValueNodeCacheHit()
 		if cachedValue == nil {
@@ -71,7 +79,7 @@ func (db *valueNodeDB) Get(key path) (*node, error) {
 	}
 	db.metrics.ValueNodeCacheMiss()
 
-	prefixedKey := addPrefixToKey(db.bufferPool, valueNodePrefix, key.Serialize().Value)
+	prefixedKey := addPrefixToKey(db.bufferPool, valueNodePrefix, key.Bytes())
 	defer db.bufferPool.Put(prefixedKey)
 
 	db.metrics.DatabaseNodeRead()
@@ -86,14 +94,14 @@ func (db *valueNodeDB) Get(key path) (*node, error) {
 // Batch of database operations
 type valueNodeBatch struct {
 	db  *valueNodeDB
-	ops map[path]*node
+	ops map[Key]*node
 }
 
-func (b *valueNodeBatch) Put(key path, value *node) {
+func (b *valueNodeBatch) Put(key Key, value *node) {
 	b.ops[key] = value
 }
 
-func (b *valueNodeBatch) Delete(key path) {
+func (b *valueNodeBatch) Delete(key Key) {
 	b.ops[key] = nil
 }
 
@@ -103,7 +111,7 @@ func (b *valueNodeBatch) Write() error {
 	for key, n := range b.ops {
 		b.db.metrics.DatabaseNodeWrite()
 		b.db.nodeCache.Put(key, n)
-		prefixedKey := addPrefixToKey(b.db.bufferPool, valueNodePrefix, key.Serialize().Value)
+		prefixedKey := addPrefixToKey(b.db.bufferPool, valueNodePrefix, key.Bytes())
 		if n == nil {
 			if err := dbBatch.Delete(prefixedKey); err != nil {
 				return err
@@ -139,7 +147,7 @@ func (i *iterator) Key() []byte {
 	if i.current == nil {
 		return nil
 	}
-	return i.current.key.Serialize().Value
+	return i.current.key.Bytes()
 }
 
 func (i *iterator) Value() []byte {
@@ -161,7 +169,7 @@ func (i *iterator) Next() bool {
 	i.db.metrics.DatabaseNodeRead()
 	key := i.nodeIter.Key()
 	key = key[valueNodePrefixLen:]
-	n, err := parseNode(newPath(key), i.nodeIter.Value())
+	n, err := parseNode(ToKey(key, i.db.branchFactor), i.nodeIter.Value())
 	if err != nil {
 		i.err = err
 		return false

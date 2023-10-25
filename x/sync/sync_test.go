@@ -83,6 +83,7 @@ func Test_Creation(t *testing.T) {
 		TargetRoot:            ids.Empty,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 	require.NotNil(syncer)
@@ -113,6 +114,7 @@ func Test_Completion(t *testing.T) {
 		TargetRoot:            emptyRoot,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 	require.NotNil(syncer)
@@ -215,6 +217,7 @@ func Test_Sync_FindNextKey_InSync(t *testing.T) {
 		TargetRoot:            syncRoot,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 	require.NotNil(syncer)
@@ -290,6 +293,7 @@ func Test_Sync_FindNextKey_Deleted(t *testing.T) {
 		TargetRoot:            syncRoot,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 
@@ -337,6 +341,7 @@ func Test_Sync_FindNextKey_BranchInLocal(t *testing.T) {
 		TargetRoot:            syncRoot,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 	require.NoError(db.Put([]byte{0x12}, []byte{4}))
@@ -371,6 +376,7 @@ func Test_Sync_FindNextKey_BranchInReceived(t *testing.T) {
 		TargetRoot:            syncRoot,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 	require.NoError(db.Delete([]byte{0x12}))
@@ -405,6 +411,7 @@ func Test_Sync_FindNextKey_ExtraValues(t *testing.T) {
 		TargetRoot:            syncRoot,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 	require.NotNil(syncer)
@@ -466,6 +473,7 @@ func TestFindNextKeyEmptyEndProof(t *testing.T) {
 		TargetRoot:            ids.Empty,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 	require.NotNil(syncer)
@@ -533,6 +541,7 @@ func Test_Sync_FindNextKey_DifferentChild(t *testing.T) {
 		TargetRoot:            syncRoot,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 	require.NotNil(syncer)
@@ -657,7 +666,7 @@ func TestFindNextKeyRandom(t *testing.T) {
 		require.NoError(err)
 
 		type keyAndID struct {
-			key merkledb.SerializedPath
+			key merkledb.Key
 			id  ids.ID
 		}
 
@@ -666,7 +675,7 @@ func TestFindNextKeyRandom(t *testing.T) {
 		for _, node := range remoteProof.EndProof {
 			for childIdx, childID := range node.Children {
 				remoteKeyIDs = append(remoteKeyIDs, keyAndID{
-					key: node.KeyPath.AppendNibble(childIdx),
+					key: node.Key.Append(childIdx),
 					id:  childID,
 				})
 			}
@@ -677,7 +686,7 @@ func TestFindNextKeyRandom(t *testing.T) {
 		for _, node := range localProof.Path {
 			for childIdx, childID := range node.Children {
 				localKeyIDs = append(localKeyIDs, keyAndID{
-					key: node.KeyPath.AppendNibble(childIdx),
+					key: node.Key.Append(childIdx),
 					id:  childID,
 				})
 			}
@@ -685,9 +694,7 @@ func TestFindNextKeyRandom(t *testing.T) {
 
 		// Sort in ascending order by key prefix.
 		serializedPathLess := func(i, j keyAndID) bool {
-			return bytes.Compare(i.key.Value, j.key.Value) < 0 ||
-				(bytes.Equal(i.key.Value, j.key.Value) &&
-					i.key.NibbleLength < j.key.NibbleLength)
+			return i.key.Less(j.key)
 		}
 		slices.SortFunc(remoteKeyIDs, serializedPathLess)
 		slices.SortFunc(localKeyIDs, serializedPathLess)
@@ -700,12 +707,12 @@ func TestFindNextKeyRandom(t *testing.T) {
 				firstIdxOutOfRange   = len(keyIDs)
 			)
 			for i, keyID := range keyIDs {
-				if !firstIdxInRangeFound && bytes.Compare(keyID.key.Value, lastReceivedKey) > 0 {
+				if !firstIdxInRangeFound && bytes.Compare(keyID.key.Bytes(), lastReceivedKey) > 0 {
 					firstIdxInRange = i
 					firstIdxInRangeFound = true
 					continue
 				}
-				if bytes.Compare(keyID.key.Value, rangeEnd) > 0 {
+				if bytes.Compare(keyID.key.Bytes(), rangeEnd) > 0 {
 					firstIdxOutOfRange = i
 					break
 				}
@@ -722,7 +729,7 @@ func TestFindNextKeyRandom(t *testing.T) {
 		// Find smallest difference between the set of key/ID pairs proven by
 		// the remote/local proofs for key/ID pairs after the last received key.
 		var (
-			smallestDiffKey merkledb.SerializedPath
+			smallestDiffKey merkledb.Key
 			foundDiff       bool
 		)
 		for i := 0; i < len(remoteKeyIDs) && i < len(localKeyIDs); i++ {
@@ -732,7 +739,7 @@ func TestFindNextKeyRandom(t *testing.T) {
 				smaller, bigger = localKeyIDs[i], remoteKeyIDs[i]
 			}
 
-			if !smaller.key.Equal(bigger.key) || smaller.id != bigger.id {
+			if smaller.key != bigger.key || smaller.id != bigger.id {
 				smallestDiffKey = smaller.key
 				foundDiff = true
 				break
@@ -755,6 +762,7 @@ func TestFindNextKeyRandom(t *testing.T) {
 			TargetRoot:            ids.GenerateTestID(),
 			SimultaneousWorkLimit: 5,
 			Log:                   logging.NoLog{},
+			BranchFactor:          merkledb.BranchFactor16,
 		})
 		require.NoError(err)
 
@@ -766,12 +774,12 @@ func TestFindNextKeyRandom(t *testing.T) {
 		)
 		require.NoError(err)
 
-		if bytes.Compare(smallestDiffKey.Value, rangeEnd) >= 0 {
+		if bytes.Compare(smallestDiffKey.Bytes(), rangeEnd) >= 0 {
 			// The smallest key which differs is after the range end so the
 			// next key to get should be nil because we're done fetching the range.
 			require.True(gotFirstDiff.IsNothing())
 		} else {
-			require.Equal(smallestDiffKey.Value, gotFirstDiff.Value())
+			require.Equal(smallestDiffKey.Bytes(), gotFirstDiff.Value())
 		}
 	}
 }
@@ -801,6 +809,7 @@ func Test_Sync_Result_Correct_Root(t *testing.T) {
 		TargetRoot:            syncRoot,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 	require.NotNil(syncer)
@@ -859,6 +868,7 @@ func Test_Sync_Result_Correct_Root_With_Sync_Restart(t *testing.T) {
 		TargetRoot:            syncRoot,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 	require.NotNil(syncer)
@@ -884,6 +894,7 @@ func Test_Sync_Result_Correct_Root_With_Sync_Restart(t *testing.T) {
 		TargetRoot:            syncRoot,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 	require.NotNil(newSyncer)
@@ -948,6 +959,7 @@ func Test_Sync_Error_During_Sync(t *testing.T) {
 		TargetRoot:            syncRoot,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 	require.NotNil(syncer)
@@ -1045,6 +1057,7 @@ func Test_Sync_Result_Correct_Root_Update_Root_During(t *testing.T) {
 		TargetRoot:            firstSyncRoot,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 	require.NotNil(syncer)
@@ -1084,6 +1097,7 @@ func Test_Sync_UpdateSyncTarget(t *testing.T) {
 		TargetRoot:            ids.Empty,
 		SimultaneousWorkLimit: 5,
 		Log:                   logging.NoLog{},
+		BranchFactor:          merkledb.BranchFactor16,
 	})
 	require.NoError(err)
 

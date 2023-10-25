@@ -5,11 +5,14 @@ package state
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
+
+	"go.uber.org/mock/gomock"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/memdb"
@@ -20,19 +23,19 @@ import (
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
-	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/platformvm/block"
 	"github.com/ava-labs/avalanchego/vms/platformvm/config"
+	"github.com/ava-labs/avalanchego/vms/platformvm/fx"
 	"github.com/ava-labs/avalanchego/vms/platformvm/genesis"
 	"github.com/ava-labs/avalanchego/vms/platformvm/metrics"
 	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 
-	stdmath "math"
+	safemath "github.com/ava-labs/avalanchego/utils/math"
 )
 
 var (
@@ -119,17 +122,20 @@ func newInitializedState(require *require.Assertions) (State, database.Database)
 	require.NoError(initialChainTx.Initialize(txs.Codec))
 
 	genesisBlkID := ids.GenerateTestID()
-	genesisState := &genesis.State{
-		UTXOs: []*avax.UTXO{
+	genesisState := &genesis.Genesis{
+		UTXOs: []*genesis.UTXO{
 			{
-				UTXOID: avax.UTXOID{
-					TxID:        initialTxID,
-					OutputIndex: 0,
+				UTXO: avax.UTXO{
+					UTXOID: avax.UTXOID{
+						TxID:        initialTxID,
+						OutputIndex: 0,
+					},
+					Asset: avax.Asset{ID: initialTxID},
+					Out: &secp256k1fx.TransferOutput{
+						Amt: units.Schmeckle,
+					},
 				},
-				Asset: avax.Asset{ID: initialTxID},
-				Out: &secp256k1fx.TransferOutput{
-					Amt: units.Schmeckle,
-				},
+				Message: nil,
 			},
 		},
 		Validators: []*txs.Tx{
@@ -155,16 +161,12 @@ func newUninitializedState(require *require.Assertions) (State, database.Databas
 }
 
 func newStateFromDB(require *require.Assertions, db database.Database) State {
-	vdrs := validators.NewManager()
-	primaryVdrs := validators.NewSet()
-	_ = vdrs.Add(constants.PrimaryNetworkID, primaryVdrs)
-
 	execCfg, _ := config.GetExecutionConfig(nil)
 	state, err := newState(
 		db,
 		metrics.Noop,
 		&config.Config{
-			Validators: vdrs,
+			Validators: validators.NewManager(),
 		},
 		execCfg,
 		&snow.Context{},
@@ -217,14 +219,14 @@ func TestValidatorWeightDiff(t *testing.T) {
 			name: "decrease overflow",
 			ops: []func(*ValidatorWeightDiff) error{
 				func(d *ValidatorWeightDiff) error {
-					return d.Add(true, stdmath.MaxUint64)
+					return d.Add(true, math.MaxUint64)
 				},
 				func(d *ValidatorWeightDiff) error {
 					return d.Add(true, 1)
 				},
 			},
 			expected:    &ValidatorWeightDiff{},
-			expectedErr: math.ErrOverflow,
+			expectedErr: safemath.ErrOverflow,
 		},
 		{
 			name: "simple increase",
@@ -246,14 +248,14 @@ func TestValidatorWeightDiff(t *testing.T) {
 			name: "increase overflow",
 			ops: []func(*ValidatorWeightDiff) error{
 				func(d *ValidatorWeightDiff) error {
-					return d.Add(false, stdmath.MaxUint64)
+					return d.Add(false, math.MaxUint64)
 				},
 				func(d *ValidatorWeightDiff) error {
 					return d.Add(false, 1)
 				},
 			},
 			expected:    &ValidatorWeightDiff{},
-			expectedErr: math.ErrOverflow,
+			expectedErr: safemath.ErrOverflow,
 		},
 		{
 			name: "varied use",
@@ -655,4 +657,41 @@ func TestParsedStateBlock(t *testing.T) {
 		require.False(isStateBlk)
 		require.Equal(blk.ID(), gotBlk.ID())
 	}
+}
+
+func TestStateSubnetOwner(t *testing.T) {
+	require := require.New(t)
+
+	state, _ := newInitializedState(require)
+	ctrl := gomock.NewController(t)
+
+	var (
+		owner1 = fx.NewMockOwner(ctrl)
+		owner2 = fx.NewMockOwner(ctrl)
+
+		createSubnetTx = &txs.Tx{
+			Unsigned: &txs.CreateSubnetTx{
+				BaseTx: txs.BaseTx{},
+				Owner:  owner1,
+			},
+		}
+
+		subnetID = createSubnetTx.ID()
+	)
+
+	owner, err := state.GetSubnetOwner(subnetID)
+	require.ErrorIs(err, database.ErrNotFound)
+	require.Nil(owner)
+
+	state.AddSubnet(createSubnetTx)
+	state.SetSubnetOwner(subnetID, owner1)
+
+	owner, err = state.GetSubnetOwner(subnetID)
+	require.NoError(err)
+	require.Equal(owner1, owner)
+
+	state.SetSubnetOwner(subnetID, owner2)
+	owner, err = state.GetSubnetOwner(subnetID)
+	require.NoError(err)
+	require.Equal(owner2, owner)
 }

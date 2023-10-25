@@ -278,8 +278,7 @@ func TestMissingJobs(t *testing.T) {
 	numMissingIDs := jobs.NumMissingIDs()
 	require.Equal(2, numMissingIDs)
 
-	missingIDSet := set.Set[ids.ID]{}
-	missingIDSet.Add(jobs.MissingIDs()...)
+	missingIDSet := set.Of(jobs.MissingIDs()...)
 
 	containsJob0ID := missingIDSet.Contains(job0ID)
 	require.True(containsJob0ID)
@@ -295,8 +294,7 @@ func TestMissingJobs(t *testing.T) {
 	require.NoError(err)
 	require.NoError(jobs.SetParser(context.Background(), parser))
 
-	missingIDSet = set.Set[ids.ID]{}
-	missingIDSet.Add(jobs.MissingIDs()...)
+	missingIDSet = set.Of(jobs.MissingIDs()...)
 
 	containsJob0ID = missingIDSet.Contains(job0ID)
 	require.True(containsJob0ID)

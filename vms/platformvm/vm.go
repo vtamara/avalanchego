@@ -5,8 +5,8 @@ package platformvm
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/gorilla/rpc/v2"
 	"github.com/prometheus/client_golang/prometheus"
@@ -55,8 +55,6 @@ var (
 	_ secp256k1fx.VM             = (*VM)(nil)
 	_ validators.State           = (*VM)(nil)
 	_ validators.SubnetConnector = (*VM)(nil)
-
-	errMissingValidatorSet = errors.New("missing validator set")
 )
 
 type VM struct {
@@ -153,7 +151,7 @@ func (vm *VM) Initialize(
 	vm.State = validatorManager
 	vm.atomicUtxosManager = avax.NewAtomicUTXOManager(chainCtx.SharedMemory, txs.Codec)
 	utxoHandler := utxo.NewHandler(vm.ctx, &vm.clock, vm.fx)
-	vm.uptimeManager = uptime.NewManager(vm.state)
+	vm.uptimeManager = uptime.NewManager(vm.state, &vm.clock)
 	vm.UptimeLockedCalculator.SetCalculator(&vm.bootstrapped, &chainCtx.Lock, vm.uptimeManager)
 
 	vm.txBuilder = txbuilder.New(
@@ -304,19 +302,15 @@ func (vm *VM) onNormalOperationsStarted() error {
 		return err
 	}
 
-	primaryVdrIDs, err := validators.NodeIDs(vm.Validators, constants.PrimaryNetworkID)
-	if err != nil {
-		return err
-	}
+	primaryVdrIDs := vm.Validators.GetValidatorIDs(constants.PrimaryNetworkID)
+
 	if err := vm.uptimeManager.StartTracking(primaryVdrIDs, constants.PrimaryNetworkID); err != nil {
 		return err
 	}
 
 	for subnetID := range vm.TrackedSubnets {
-		vdrIDs, err := validators.NodeIDs(vm.Validators, subnetID)
-		if err != nil {
-			return err
-		}
+		vdrIDs := vm.Validators.GetValidatorIDs(subnetID)
+
 		if err := vm.uptimeManager.StartTracking(vdrIDs, subnetID); err != nil {
 			return err
 		}
@@ -351,19 +345,13 @@ func (vm *VM) Shutdown(context.Context) error {
 	vm.Builder.Shutdown()
 
 	if vm.bootstrapped.Get() {
-		primaryVdrIDs, err := validators.NodeIDs(vm.Validators, constants.PrimaryNetworkID)
-		if err != nil {
-			return err
-		}
+		primaryVdrIDs := vm.Validators.GetValidatorIDs(constants.PrimaryNetworkID)
 		if err := vm.uptimeManager.StopTracking(primaryVdrIDs, constants.PrimaryNetworkID); err != nil {
 			return err
 		}
 
 		for subnetID := range vm.TrackedSubnets {
-			vdrIDs, err := validators.NodeIDs(vm.Validators, subnetID)
-			if err != nil {
-				return err
-			}
+			vdrIDs := vm.Validators.GetValidatorIDs(subnetID)
 			if err := vm.uptimeManager.StopTracking(vdrIDs, subnetID); err != nil {
 				return err
 			}
@@ -414,49 +402,35 @@ func (*VM) Version(context.Context) (string, error) {
 // CreateHandlers returns a map where:
 // * keys are API endpoint extensions
 // * values are API handlers
-func (vm *VM) CreateHandlers(context.Context) (map[string]*common.HTTPHandler, error) {
+func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	server := rpc.NewServer()
 	server.RegisterCodec(json.NewCodec(), "application/json")
 	server.RegisterCodec(json.NewCodec(), "application/json;charset=UTF-8")
 	server.RegisterInterceptFunc(vm.metrics.InterceptRequest)
 	server.RegisterAfterFunc(vm.metrics.AfterRequest)
-	if err := server.RegisterService(
-		&Service{
-			vm:          vm,
-			addrManager: avax.NewAddressManager(vm.ctx),
-			stakerAttributesCache: &cache.LRU[ids.ID, *stakerAttributes]{
-				Size: stakerAttributesCacheSize,
-			},
+	service := &Service{
+		vm:          vm,
+		addrManager: avax.NewAddressManager(vm.ctx),
+		stakerAttributesCache: &cache.LRU[ids.ID, *stakerAttributes]{
+			Size: stakerAttributesCacheSize,
 		},
-		"platform",
-	); err != nil {
-		return nil, err
 	}
-
-	return map[string]*common.HTTPHandler{
-		"": {
-			Handler: server,
-		},
-	}, nil
+	err := server.RegisterService(service, "platform")
+	return map[string]http.Handler{
+		"": server,
+	}, err
 }
 
 // CreateStaticHandlers returns a map where:
 // * keys are API endpoint extensions
 // * values are API handlers
-func (*VM) CreateStaticHandlers(context.Context) (map[string]*common.HTTPHandler, error) {
+func (*VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, error) {
 	server := rpc.NewServer()
 	server.RegisterCodec(json.NewCodec(), "application/json")
 	server.RegisterCodec(json.NewCodec(), "application/json;charset=UTF-8")
-	if err := server.RegisterService(&api.StaticService{}, "platform"); err != nil {
-		return nil, err
-	}
-
-	return map[string]*common.HTTPHandler{
-		"": {
-			LockOptions: common.NoLock,
-			Handler:     server,
-		},
-	}, nil
+	return map[string]http.Handler{
+		"": server,
+	}, server.RegisterService(&api.StaticService{}, "platform")
 }
 
 func (vm *VM) Connected(_ context.Context, nodeID ids.NodeID, _ *version.Application) error {

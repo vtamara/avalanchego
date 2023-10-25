@@ -36,7 +36,7 @@ func TestHealthCheckSubnet(t *testing.T) {
 		"custom consensus params": {
 			func() snowball.Parameters {
 				params := snowball.DefaultParameters
-				params.K = params.Alpha
+				params.K = params.AlphaConfidence
 				return params
 			}(),
 		},
@@ -48,7 +48,7 @@ func TestHealthCheckSubnet(t *testing.T) {
 
 			ctx := snow.DefaultConsensusContextTest()
 
-			vdrs := validators.NewSet()
+			vdrs := validators.NewManager()
 
 			resourceTracker, err := tracker.NewResourceTracker(
 				prometheus.NewRegistry(),
@@ -59,7 +59,7 @@ func TestHealthCheckSubnet(t *testing.T) {
 			require.NoError(err)
 
 			peerTracker := commontracker.NewPeers()
-			vdrs.RegisterCallbackListener(peerTracker)
+			vdrs.RegisterCallbackListener(ctx.SubnetID, peerTracker)
 
 			sb := subnets.New(
 				ctx.NodeID,
@@ -120,7 +120,7 @@ func TestHealthCheckSubnet(t *testing.T) {
 				vdrID := ids.GenerateTestNodeID()
 				vdrIDs.Add(vdrID)
 
-				require.NoError(vdrs.Add(vdrID, nil, ids.Empty, 100))
+				require.NoError(vdrs.AddStaker(ctx.SubnetID, vdrID, nil, ids.Empty, 100))
 			}
 
 			for index, nodeID := range vdrIDs.List() {

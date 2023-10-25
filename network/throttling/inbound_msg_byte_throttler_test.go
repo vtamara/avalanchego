@@ -13,6 +13,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/validators"
+	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
 )
 
@@ -23,9 +24,9 @@ func TestInboundMsgByteThrottlerCancelContextDeadlock(t *testing.T) {
 		AtLargeAllocSize:    1,
 		NodeMaxAtLargeBytes: 1,
 	}
-	vdrs := validators.NewSet()
+	vdrs := validators.NewManager()
 	vdr := ids.GenerateTestNodeID()
-	require.NoError(vdrs.Add(vdr, nil, ids.Empty, 1))
+	require.NoError(vdrs.AddStaker(constants.PrimaryNetworkID, vdr, nil, ids.Empty, 1))
 
 	throttler, err := newInboundMsgByteThrottler(
 		logging.NoLog{},
@@ -51,11 +52,11 @@ func TestInboundMsgByteThrottlerCancelContext(t *testing.T) {
 		AtLargeAllocSize:    512,
 		NodeMaxAtLargeBytes: 1024,
 	}
-	vdrs := validators.NewSet()
+	vdrs := validators.NewManager()
 	vdr1ID := ids.GenerateTestNodeID()
 	vdr2ID := ids.GenerateTestNodeID()
-	require.NoError(vdrs.Add(vdr1ID, nil, ids.Empty, 1))
-	require.NoError(vdrs.Add(vdr2ID, nil, ids.Empty, 1))
+	require.NoError(vdrs.AddStaker(constants.PrimaryNetworkID, vdr1ID, nil, ids.Empty, 1))
+	require.NoError(vdrs.AddStaker(constants.PrimaryNetworkID, vdr2ID, nil, ids.Empty, 1))
 
 	throttler, err := newInboundMsgByteThrottler(
 		logging.NoLog{},
@@ -109,11 +110,11 @@ func TestInboundMsgByteThrottler(t *testing.T) {
 		AtLargeAllocSize:    1024,
 		NodeMaxAtLargeBytes: 1024,
 	}
-	vdrs := validators.NewSet()
+	vdrs := validators.NewManager()
 	vdr1ID := ids.GenerateTestNodeID()
 	vdr2ID := ids.GenerateTestNodeID()
-	require.NoError(vdrs.Add(vdr1ID, nil, ids.Empty, 1))
-	require.NoError(vdrs.Add(vdr2ID, nil, ids.Empty, 1))
+	require.NoError(vdrs.AddStaker(constants.PrimaryNetworkID, vdr1ID, nil, ids.Empty, 1))
+	require.NoError(vdrs.AddStaker(constants.PrimaryNetworkID, vdr2ID, nil, ids.Empty, 1))
 
 	throttler, err := newInboundMsgByteThrottler(
 		logging.NoLog{},
@@ -327,9 +328,9 @@ func TestSybilMsgThrottlerMaxNonVdr(t *testing.T) {
 		AtLargeAllocSize:    100,
 		NodeMaxAtLargeBytes: 10,
 	}
-	vdrs := validators.NewSet()
+	vdrs := validators.NewManager()
 	vdr1ID := ids.GenerateTestNodeID()
-	require.NoError(vdrs.Add(vdr1ID, nil, ids.Empty, 1))
+	require.NoError(vdrs.AddStaker(constants.PrimaryNetworkID, vdr1ID, nil, ids.Empty, 1))
 	throttler, err := newInboundMsgByteThrottler(
 		logging.NoLog{},
 		"",
@@ -374,9 +375,9 @@ func TestMsgThrottlerNextMsg(t *testing.T) {
 		AtLargeAllocSize:    1024,
 		NodeMaxAtLargeBytes: 1024,
 	}
-	vdrs := validators.NewSet()
+	vdrs := validators.NewManager()
 	vdr1ID := ids.GenerateTestNodeID()
-	require.NoError(vdrs.Add(vdr1ID, nil, ids.Empty, 1))
+	require.NoError(vdrs.AddStaker(constants.PrimaryNetworkID, vdr1ID, nil, ids.Empty, 1))
 	nonVdrNodeID := ids.GenerateTestNodeID()
 
 	maxVdrBytes := config.VdrAllocSize + config.AtLargeAllocSize

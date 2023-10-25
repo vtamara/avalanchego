@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/utils/logging"
-	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/timer"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
@@ -43,7 +43,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/status"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
 
-	stdmath "math"
+	safemath "github.com/ava-labs/avalanchego/utils/math"
 )
 
 const (
@@ -56,10 +56,7 @@ const (
 var (
 	_ State = (*state)(nil)
 
-	ErrCantFindSubnet               = errors.New("couldn't find subnet")
-	errMissingValidatorSet          = errors.New("missing validator set")
 	errValidatorSetAlreadyPopulated = errors.New("validator set already populated")
-	errDuplicateValidatorSet        = errors.New("duplicate validator set")
 	errIsNotSubnet                  = errors.New("is not a subnet")
 
 	blockIDPrefix                       = []byte("blockID")
@@ -79,6 +76,7 @@ var (
 	rewardUTXOsPrefix                   = []byte("rewardUTXOs")
 	utxoPrefix                          = []byte("utxo")
 	subnetPrefix                        = []byte("subnet")
+	subnetOwnerPrefix                   = []byte("subnetOwner")
 	transformedSubnetPrefix             = []byte("transformedSubnet")
 	supplyPrefix                        = []byte("supply")
 	chainPrefix                         = []byte("chain")
@@ -113,6 +111,7 @@ type Chain interface {
 	AddSubnet(createSubnetTx *txs.Tx)
 
 	GetSubnetOwner(subnetID ids.ID) (fx.Owner, error)
+	SetSubnetOwner(subnetID ids.ID, owner fx.Owner)
 
 	GetSubnetTransformation(subnetID ids.ID) (*txs.Tx, error)
 	AddSubnetTransformation(transformSubnetTx *txs.Tx)
@@ -139,9 +138,9 @@ type State interface {
 
 	GetBlockIDAtHeight(height uint64) (ids.ID, error)
 
-	// ValidatorSet adds all the validators and delegators of [subnetID] into
-	// [vdrs].
-	ValidatorSet(subnetID ids.ID, vdrs validators.Set) error
+	// ApplyCurrentValidators adds all the current validators and delegators of
+	// [subnetID] into [vdrs].
+	ApplyCurrentValidators(subnetID ids.ID, vdrs validators.Manager) error
 
 	// ApplyValidatorWeightDiffs iterates from [startHeight] towards the genesis
 	// block until it has applied all of the diffs up to and including
@@ -272,6 +271,8 @@ type stateBlk struct {
  * |-. subnets
  * | '-. list
  * |   '-- txID -> nil
+ * |-. subnetOwners
+ * | '-. subnetID -> owner
  * |-. chains
  * | '-. subnetID
  * |   '-. list
@@ -350,6 +351,11 @@ type state struct {
 	subnetBaseDB  database.Database
 	subnetDB      linkeddb.LinkedDB
 
+	// Subnet ID --> Owner of the subnet
+	subnetOwners     map[ids.ID]fx.Owner
+	subnetOwnerCache cache.Cacher[ids.ID, fxOwnerAndSize] // cache of subnetID -> owner if the entry is nil, it is not in the database
+	subnetOwnerDB    database.Database
+
 	transformedSubnets     map[ids.ID]*txs.Tx            // map of subnetID -> transformSubnetTx
 	transformedSubnetCache cache.Cacher[ids.ID, *txs.Tx] // cache of subnetID -> transformSubnetTx if the entry is nil, it is not in the database
 	transformedSubnetDB    database.Database
@@ -390,14 +396,14 @@ type ValidatorWeightDiff struct {
 func (v *ValidatorWeightDiff) Add(negative bool, amount uint64) error {
 	if v.Decrease == negative {
 		var err error
-		v.Amount, err = math.Add64(v.Amount, amount)
+		v.Amount, err = safemath.Add64(v.Amount, amount)
 		return err
 	}
 
 	if v.Amount > amount {
 		v.Amount -= amount
 	} else {
-		v.Amount = math.AbsDiff(v.Amount, amount)
+		v.Amount = safemath.AbsDiff(v.Amount, amount)
 		v.Decrease = negative
 	}
 	return nil
@@ -416,6 +422,11 @@ type txBytesAndStatus struct {
 type txAndStatus struct {
 	tx     *txs.Tx
 	status status.Status
+}
+
+type fxOwnerAndSize struct {
+	owner fx.Owner
+	size  int
 }
 
 func txSize(_ ids.ID, tx *txs.Tx) int {
@@ -571,6 +582,18 @@ func newState(
 
 	subnetBaseDB := prefixdb.New(subnetPrefix, baseDB)
 
+	subnetOwnerDB := prefixdb.New(subnetOwnerPrefix, baseDB)
+	subnetOwnerCache, err := metercacher.New[ids.ID, fxOwnerAndSize](
+		"subnet_owner_cache",
+		metricsReg,
+		cache.NewSizedLRU[ids.ID, fxOwnerAndSize](execCfg.FxOwnerCacheSize, func(_ ids.ID, f fxOwnerAndSize) int {
+			return ids.IDLen + f.size
+		}),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	transformedSubnetCache, err := metercacher.New(
 		"transformed_subnet_cache",
 		metricsReg,
@@ -666,6 +689,10 @@ func newState(
 
 		subnetBaseDB: subnetBaseDB,
 		subnetDB:     linkeddb.NewDefault(subnetBaseDB),
+
+		subnetOwners:     make(map[ids.ID]fx.Owner),
+		subnetOwnerDB:    subnetOwnerDB,
+		subnetOwnerCache: subnetOwnerCache,
 
 		transformedSubnets:     make(map[ids.ID]*txs.Tx),
 		transformedSubnetCache: transformedSubnetCache,
@@ -817,14 +844,39 @@ func (s *state) AddSubnet(createSubnetTx *txs.Tx) {
 }
 
 func (s *state) GetSubnetOwner(subnetID ids.ID) (fx.Owner, error) {
+	if owner, exists := s.subnetOwners[subnetID]; exists {
+		return owner, nil
+	}
+
+	if ownerAndSize, cached := s.subnetOwnerCache.Get(subnetID); cached {
+		if ownerAndSize.owner == nil {
+			return nil, database.ErrNotFound
+		}
+		return ownerAndSize.owner, nil
+	}
+
+	ownerBytes, err := s.subnetOwnerDB.Get(subnetID[:])
+	if err == nil {
+		var owner fx.Owner
+		if _, err := block.GenesisCodec.Unmarshal(ownerBytes, &owner); err != nil {
+			return nil, err
+		}
+		s.subnetOwnerCache.Put(subnetID, fxOwnerAndSize{
+			owner: owner,
+			size:  len(ownerBytes),
+		})
+		return owner, nil
+	}
+	if err != database.ErrNotFound {
+		return nil, err
+	}
+
 	subnetIntf, _, err := s.GetTx(subnetID)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"%w %q: %w",
-			ErrCantFindSubnet,
-			subnetID,
-			err,
-		)
+		if err == database.ErrNotFound {
+			s.subnetOwnerCache.Put(subnetID, fxOwnerAndSize{})
+		}
+		return nil, err
 	}
 
 	subnet, ok := subnetIntf.Unsigned.(*txs.CreateSubnetTx)
@@ -832,7 +884,12 @@ func (s *state) GetSubnetOwner(subnetID ids.ID) (fx.Owner, error) {
 		return nil, fmt.Errorf("%q %w", subnetID, errIsNotSubnet)
 	}
 
+	s.SetSubnetOwner(subnetID, subnet.Owner)
 	return subnet.Owner, nil
+}
+
+func (s *state) SetSubnetOwner(subnetID ids.ID, owner fx.Owner) {
+	s.subnetOwners[subnetID] = owner
 }
 
 func (s *state) GetSubnetTransformation(subnetID ids.ID) (*txs.Tx, error) {
@@ -1080,17 +1137,17 @@ func (s *state) SetCurrentSupply(subnetID ids.ID, cs uint64) {
 	}
 }
 
-func (s *state) ValidatorSet(subnetID ids.ID, vdrs validators.Set) error {
+func (s *state) ApplyCurrentValidators(subnetID ids.ID, vdrs validators.Manager) error {
 	for nodeID, validator := range s.currentStakers.validators[subnetID] {
 		staker := validator.validator
-		if err := vdrs.Add(nodeID, staker.PublicKey, staker.TxID, staker.Weight); err != nil {
+		if err := vdrs.AddStaker(subnetID, nodeID, staker.PublicKey, staker.TxID, staker.Weight); err != nil {
 			return err
 		}
 
 		delegatorIterator := NewTreeIterator(validator.delegators)
 		for delegatorIterator.Next() {
 			staker := delegatorIterator.Value()
-			if err := vdrs.AddWeight(nodeID, staker.Weight); err != nil {
+			if err := vdrs.AddWeight(subnetID, nodeID, staker.Weight); err != nil {
 				delegatorIterator.Release()
 				return err
 			}
@@ -1207,11 +1264,11 @@ func applyWeightDiff(
 	if weightDiff.Decrease {
 		// The validator's weight was decreased at this block, so in the
 		// prior block it was higher.
-		vdr.Weight, err = math.Add64(vdr.Weight, weightDiff.Amount)
+		vdr.Weight, err = safemath.Add64(vdr.Weight, weightDiff.Amount)
 	} else {
 		// The validator's weight was increased at this block, so in the
 		// prior block it was lower.
-		vdr.Weight, err = math.Sub(vdr.Weight, weightDiff.Amount)
+		vdr.Weight, err = safemath.Sub(vdr.Weight, weightDiff.Amount)
 	}
 	if err != nil {
 		return err
@@ -1274,7 +1331,7 @@ func (s *state) ApplyValidatorPublicKeyDiffs(
 	return diffIter.Error()
 }
 
-func (s *state) syncGenesis(genesisBlk block.Block, genesis *genesis.State) error {
+func (s *state) syncGenesis(genesisBlk block.Block, genesis *genesis.Genesis) error {
 	genesisBlkID := genesisBlk.ID()
 	s.SetLastAccepted(genesisBlkID)
 	s.SetTimestamp(time.Unix(int64(genesis.Timestamp), 0))
@@ -1283,7 +1340,8 @@ func (s *state) syncGenesis(genesisBlk block.Block, genesis *genesis.State) erro
 
 	// Persist UTXOs that exist at genesis
 	for _, utxo := range genesis.UTXOs {
-		s.AddUTXO(utxo)
+		avaxUTXO := utxo.UTXO
+		s.AddUTXO(&avaxUTXO)
 	}
 
 	// Persist primary network validator set at genesis
@@ -1305,7 +1363,7 @@ func (s *state) syncGenesis(genesisBlk block.Block, genesis *genesis.State) erro
 			stakeAmount,
 			currentSupply,
 		)
-		newCurrentSupply, err := math.Add64(currentSupply, potentialReward)
+		newCurrentSupply, err := safemath.Add64(currentSupply, potentialReward)
 		if err != nil {
 			return err
 		}
@@ -1508,8 +1566,10 @@ func (s *state) loadCurrentValidators() error {
 				return err
 			}
 
-			potentialRewardBytes := delegatorIt.Value()
-			potentialReward, err := database.ParseUInt64(potentialRewardBytes)
+			metadata := &delegatorMetadata{
+				txID: txID,
+			}
+			err = parseDelegatorMetadata(delegatorIt.Value(), metadata)
 			if err != nil {
 				return err
 			}
@@ -1519,7 +1579,7 @@ func (s *state) loadCurrentValidators() error {
 				return fmt.Errorf("expected tx type txs.Staker but got %T", tx.Unsigned)
 			}
 
-			staker, err := NewCurrentStaker(txID, stakerTx, potentialReward)
+			staker, err := NewCurrentStaker(txID, stakerTx, metadata.PotentialReward)
 			if err != nil {
 				return err
 			}
@@ -1633,38 +1693,37 @@ func (s *state) loadPendingValidators() error {
 // Invariant: initValidatorSets requires loadCurrentValidators to have already
 // been called.
 func (s *state) initValidatorSets() error {
-	primaryValidators, ok := s.cfg.Validators.Get(constants.PrimaryNetworkID)
-	if !ok {
-		return errMissingValidatorSet
-	}
-	if primaryValidators.Len() != 0 {
+	if s.cfg.Validators.Count(constants.PrimaryNetworkID) != 0 {
 		// Enforce the invariant that the validator set is empty here.
 		return errValidatorSetAlreadyPopulated
 	}
-	err := s.ValidatorSet(constants.PrimaryNetworkID, primaryValidators)
+	err := s.ApplyCurrentValidators(constants.PrimaryNetworkID, s.cfg.Validators)
 	if err != nil {
 		return err
 	}
 
 	vl := validators.NewLogger(s.ctx.Log, s.bootstrapped, constants.PrimaryNetworkID, s.ctx.NodeID)
-	primaryValidators.RegisterCallbackListener(vl)
+	s.cfg.Validators.RegisterCallbackListener(constants.PrimaryNetworkID, vl)
 
-	s.metrics.SetLocalStake(primaryValidators.GetWeight(s.ctx.NodeID))
-	s.metrics.SetTotalStake(primaryValidators.Weight())
+	s.metrics.SetLocalStake(s.cfg.Validators.GetWeight(constants.PrimaryNetworkID, s.ctx.NodeID))
+	totalWeight, err := s.cfg.Validators.TotalWeight(constants.PrimaryNetworkID)
+	if err != nil {
+		return fmt.Errorf("failed to get total weight of primary network validators: %w", err)
+	}
+	s.metrics.SetTotalStake(totalWeight)
 
 	for subnetID := range s.cfg.TrackedSubnets {
-		subnetValidators := validators.NewSet()
-		err := s.ValidatorSet(subnetID, subnetValidators)
+		if s.cfg.Validators.Count(subnetID) != 0 {
+			// Enforce the invariant that the validator set is empty here.
+			return errValidatorSetAlreadyPopulated
+		}
+		err := s.ApplyCurrentValidators(subnetID, s.cfg.Validators)
 		if err != nil {
 			return err
 		}
 
-		if !s.cfg.Validators.Add(subnetID, subnetValidators) {
-			return fmt.Errorf("%w: %s", errDuplicateValidatorSet, subnetID)
-		}
-
 		vl := validators.NewLogger(s.ctx.Log, s.bootstrapped, subnetID, s.ctx.NodeID)
-		subnetValidators.RegisterCallbackListener(vl)
+		s.cfg.Validators.RegisterCallbackListener(subnetID, vl)
 	}
 	return nil
 }
@@ -1680,6 +1739,7 @@ func (s *state) write(updateValidators bool, height uint64) error {
 		s.writeRewardUTXOs(),
 		s.writeUTXOs(),
 		s.writeSubnets(),
+		s.writeSubnetOwners(),
 		s.writeTransformedSubnets(),
 		s.writeSubnetSupplies(),
 		s.writeChains(),
@@ -1755,11 +1815,11 @@ func (s *state) init(genesisBytes []byte) error {
 		return err
 	}
 
-	genesisState, err := genesis.ParseState(genesisBytes)
+	genesis, err := genesis.Parse(genesisBytes)
 	if err != nil {
 		return err
 	}
-	if err := s.syncGenesis(genesisBlock, genesisState); err != nil {
+	if err := s.syncGenesis(genesisBlock, genesis); err != nil {
 		return err
 	}
 
@@ -1972,7 +2032,7 @@ func (s *state) writeCurrentStakers(updateValidators bool, height uint64) error 
 					PotentialDelegateeReward: 0,
 				}
 
-				metadataBytes, err := block.GenesisCodec.Marshal(block.Version, metadata)
+				metadataBytes, err := metadataCodec.Marshal(v0, metadata)
 				if err != nil {
 					return fmt.Errorf("failed to serialize current validator: %w", err)
 				}
@@ -2063,12 +2123,11 @@ func (s *state) writeCurrentStakers(updateValidators bool, height uint64) error 
 			}
 
 			if weightDiff.Decrease {
-				err = validators.RemoveWeight(s.cfg.Validators, subnetID, nodeID, weightDiff.Amount)
+				err = s.cfg.Validators.RemoveWeight(subnetID, nodeID, weightDiff.Amount)
 			} else {
 				if validatorDiff.validatorStatus == added {
 					staker := validatorDiff.validator
-					err = validators.Add(
-						s.cfg.Validators,
+					err = s.cfg.Validators.AddStaker(
 						subnetID,
 						nodeID,
 						staker.PublicKey,
@@ -2076,7 +2135,7 @@ func (s *state) writeCurrentStakers(updateValidators bool, height uint64) error 
 						weightDiff.Amount,
 					)
 				} else {
-					err = validators.AddWeight(s.cfg.Validators, subnetID, nodeID, weightDiff.Amount)
+					err = s.cfg.Validators.AddWeight(subnetID, nodeID, weightDiff.Amount)
 				}
 			}
 			if err != nil {
@@ -2091,12 +2150,14 @@ func (s *state) writeCurrentStakers(updateValidators bool, height uint64) error 
 	if !updateValidators {
 		return nil
 	}
-	primaryValidators, ok := s.cfg.Validators.Get(constants.PrimaryNetworkID)
-	if !ok {
-		return nil
+
+	totalWeight, err := s.cfg.Validators.TotalWeight(constants.PrimaryNetworkID)
+	if err != nil {
+		return fmt.Errorf("failed to get total weight of primary network: %w", err)
 	}
-	s.metrics.SetLocalStake(primaryValidators.GetWeight(s.ctx.NodeID))
-	s.metrics.SetTotalStake(primaryValidators.Weight())
+
+	s.metrics.SetLocalStake(s.cfg.Validators.GetWeight(constants.PrimaryNetworkID, s.ctx.NodeID))
+	s.metrics.SetTotalStake(totalWeight)
 	return nil
 }
 
@@ -2114,7 +2175,11 @@ func writeCurrentDelegatorDiff(
 			return fmt.Errorf("failed to increase node weight diff: %w", err)
 		}
 
-		if err := database.PutUInt64(currentDelegatorList, staker.TxID[:], staker.PotentialReward); err != nil {
+		metadata := &delegatorMetadata{
+			txID:            staker.TxID,
+			PotentialReward: staker.PotentialReward,
+		}
+		if err := writeDelegatorMetadata(currentDelegatorList, metadata); err != nil {
 			return fmt.Errorf("failed to write current delegator to list: %w", err)
 		}
 	}
@@ -2267,6 +2332,29 @@ func (s *state) writeSubnets() error {
 		}
 	}
 	s.addedSubnets = nil
+	return nil
+}
+
+func (s *state) writeSubnetOwners() error {
+	for subnetID, owner := range s.subnetOwners {
+		subnetID := subnetID
+		owner := owner
+		delete(s.subnetOwners, subnetID)
+
+		ownerBytes, err := block.GenesisCodec.Marshal(block.Version, &owner)
+		if err != nil {
+			return fmt.Errorf("failed to marshal subnet owner: %w", err)
+		}
+
+		s.subnetOwnerCache.Put(subnetID, fxOwnerAndSize{
+			owner: owner,
+			size:  len(ownerBytes),
+		})
+
+		if err := s.subnetOwnerDB.Put(subnetID[:], ownerBytes); err != nil {
+			return fmt.Errorf("failed to write subnet owner: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -2469,7 +2557,7 @@ func (s *state) PruneAndIndex(lock sync.Locker, log logging.Logger) error {
 				eta := timer.EstimateETA(
 					startTime,
 					progress,
-					stdmath.MaxUint64,
+					math.MaxUint64,
 				)
 
 				log.Info("committing state pruning and indexing",
@@ -2484,7 +2572,7 @@ func (s *state) PruneAndIndex(lock sync.Locker, log logging.Logger) error {
 			// could take an extremely long period of time; which we should not
 			// delay processing for.
 			pruneDuration := now.Sub(lastCommit)
-			sleepDuration := math.Min(
+			sleepDuration := safemath.Min(
 				pruneCommitSleepMultiplier*pruneDuration,
 				pruneCommitSleepCap,
 			)

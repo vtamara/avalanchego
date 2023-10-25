@@ -29,7 +29,7 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 )
 
-var _ = e2e.DescribeXChain("[Interchain Workflow]", func() {
+var _ = e2e.DescribePChain("[Interchain Workflow]", ginkgo.Label(e2e.UsesCChainLabel), func() {
 	require := require.New(ginkgo.GinkgoT())
 
 	const (
@@ -130,6 +130,7 @@ var _ = e2e.DescribeXChain("[Interchain Workflow]", func() {
 					Addrs:     []ids.ShortID{rewardKey.Address()},
 				},
 				delegationShare,
+				e2e.WithDefaultContext(),
 			)
 			require.NoError(err)
 		})
@@ -159,6 +160,7 @@ var _ = e2e.DescribeXChain("[Interchain Workflow]", func() {
 					Threshold: 1,
 					Addrs:     []ids.ShortID{rewardKey.Address()},
 				},
+				e2e.WithDefaultContext(),
 			)
 			require.NoError(err)
 		})

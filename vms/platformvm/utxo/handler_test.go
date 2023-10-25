@@ -4,6 +4,7 @@
 package utxo
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
-	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
@@ -20,7 +20,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 
-	stdmath "math"
+	safemath "github.com/ava-labs/avalanchego/utils/math"
 )
 
 var _ txs.UnsignedTx = (*dummyUnsignedTx)(nil)
@@ -582,7 +582,7 @@ func TestVerifySpendUTXOs(t *testing.T) {
 				{
 					Asset: avax.Asset{ID: h.ctx.AVAXAssetID},
 					Out: &secp256k1fx.TransferOutput{
-						Amt: stdmath.MaxUint64,
+						Amt: math.MaxUint64,
 					},
 				},
 			},
@@ -590,7 +590,7 @@ func TestVerifySpendUTXOs(t *testing.T) {
 				&secp256k1fx.Credential{},
 			},
 			producedAmounts: map[ids.ID]uint64{},
-			expectedErr:     math.ErrOverflow,
+			expectedErr:     safemath.ErrOverflow,
 		},
 		{
 			description: "attempted mint",
@@ -660,7 +660,7 @@ func TestVerifySpendUTXOs(t *testing.T) {
 					Out: &stakeable.LockOut{
 						Locktime: 1,
 						TransferableOut: &secp256k1fx.TransferOutput{
-							Amt: stdmath.MaxUint64,
+							Amt: math.MaxUint64,
 						},
 					},
 				},
@@ -669,7 +669,7 @@ func TestVerifySpendUTXOs(t *testing.T) {
 				&secp256k1fx.Credential{},
 			},
 			producedAmounts: map[ids.ID]uint64{},
-			expectedErr:     math.ErrOverflow,
+			expectedErr:     safemath.ErrOverflow,
 		},
 		{
 			description: "attempted mint through mixed locking (low then high)",
@@ -701,7 +701,7 @@ func TestVerifySpendUTXOs(t *testing.T) {
 					Out: &stakeable.LockOut{
 						Locktime: 1,
 						TransferableOut: &secp256k1fx.TransferOutput{
-							Amt: stdmath.MaxUint64,
+							Amt: math.MaxUint64,
 						},
 					},
 				},
@@ -734,7 +734,7 @@ func TestVerifySpendUTXOs(t *testing.T) {
 				{
 					Asset: avax.Asset{ID: h.ctx.AVAXAssetID},
 					Out: &secp256k1fx.TransferOutput{
-						Amt: stdmath.MaxUint64,
+						Amt: math.MaxUint64,
 					},
 				},
 				{

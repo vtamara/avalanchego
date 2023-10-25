@@ -132,8 +132,8 @@ func TestExportKey(t *testing.T) {
 
 	service, _ := defaultService(t)
 	defaultAddress(t, service)
-	service.vm.ctx.Lock.Lock()
 	defer func() {
+		service.vm.ctx.Lock.Lock()
 		require.NoError(service.vm.Shutdown(context.Background()))
 		service.vm.ctx.Lock.Unlock()
 	}()
@@ -151,8 +151,8 @@ func TestImportKey(t *testing.T) {
 	require.NoError(stdjson.Unmarshal([]byte(jsonString), &args))
 
 	service, _ := defaultService(t)
-	service.vm.ctx.Lock.Lock()
 	defer func() {
+		service.vm.ctx.Lock.Lock()
 		require.NoError(service.vm.Shutdown(context.Background()))
 		service.vm.ctx.Lock.Unlock()
 	}()
@@ -169,6 +169,7 @@ func TestGetTxStatus(t *testing.T) {
 	defaultAddress(t, service)
 	service.vm.ctx.Lock.Lock()
 	defer func() {
+		service.vm.ctx.Lock.Lock()
 		require.NoError(service.vm.Shutdown(context.Background()))
 		service.vm.ctx.Lock.Unlock()
 	}()
@@ -224,6 +225,8 @@ func TestGetTxStatus(t *testing.T) {
 
 	mutableSharedMemory.SharedMemory = oldSharedMemory
 
+	service.vm.ctx.Lock.Unlock()
+
 	var (
 		arg  = &GetTxStatusArgs{TxID: tx.ID()}
 		resp GetTxStatusResponse
@@ -231,6 +234,8 @@ func TestGetTxStatus(t *testing.T) {
 	require.NoError(service.GetTxStatus(nil, arg, &resp))
 	require.Equal(status.Unknown, resp.Status)
 	require.Zero(resp.Reason)
+
+	service.vm.ctx.Lock.Lock()
 
 	// put the chain in existing chain list
 	err = service.vm.Builder.AddUnverifiedTx(tx)
@@ -247,6 +252,8 @@ func TestGetTxStatus(t *testing.T) {
 	require.NoError(blk.Verify(context.Background()))
 
 	require.NoError(blk.Accept(context.Background()))
+
+	service.vm.ctx.Lock.Unlock()
 
 	resp = GetTxStatusResponse{} // reset
 	require.NoError(service.GetTxStatus(nil, arg, &resp))
@@ -267,9 +274,9 @@ func TestGetTx(t *testing.T) {
 			func(service *Service) (*txs.Tx, error) {
 				return service.vm.txBuilder.NewCreateChainTx( // Test GetTx works for standard blocks
 					testSubnet1.ID(),
-					nil,
+					[]byte{},
 					constants.AVMID,
-					nil,
+					[]ids.ID{},
 					"chain name",
 					[]*secp256k1.PrivateKey{testSubnet1ControlKeys[0], testSubnet1ControlKeys[1]},
 					keys[0].PublicKey().Address(), // change addr
@@ -320,6 +327,8 @@ func TestGetTx(t *testing.T) {
 				tx, err := test.createTx(service)
 				require.NoError(err)
 
+				service.vm.ctx.Lock.Unlock()
+
 				arg := &api.GetTxArgs{
 					TxID:     tx.ID(),
 					Encoding: encoding,
@@ -327,6 +336,8 @@ func TestGetTx(t *testing.T) {
 				var response api.GetTxReply
 				err = service.GetTx(nil, arg, &response)
 				require.ErrorIs(err, database.ErrNotFound) // We haven't issued the tx yet
+
+				service.vm.ctx.Lock.Lock()
 
 				require.NoError(service.vm.Builder.AddUnverifiedTx(tx))
 
@@ -349,21 +360,27 @@ func TestGetTx(t *testing.T) {
 					}
 				}
 
+				service.vm.ctx.Lock.Unlock()
+
 				require.NoError(service.GetTx(nil, arg, &response))
 
 				switch encoding {
 				case formatting.Hex:
 					// we're always guaranteed a string for hex encodings.
-					responseTxBytes, err := formatting.Decode(response.Encoding, response.Tx.(string))
+					var txStr string
+					require.NoError(stdjson.Unmarshal(response.Tx, &txStr))
+					responseTxBytes, err := formatting.Decode(response.Encoding, txStr)
 					require.NoError(err)
 					require.Equal(tx.Bytes(), responseTxBytes)
 
 				case formatting.JSON:
-					require.IsType((*txs.Tx)(nil), response.Tx)
-					responseTx := response.Tx.(*txs.Tx)
-					require.Equal(tx.ID(), responseTx.ID())
+					tx.Unsigned.InitCtx(service.vm.ctx)
+					expectedTxJSON, err := stdjson.Marshal(tx)
+					require.NoError(err)
+					require.Equal(expectedTxJSON, []byte(response.Tx))
 				}
 
+				service.vm.ctx.Lock.Lock()
 				require.NoError(service.vm.Shutdown(context.Background()))
 				service.vm.ctx.Lock.Unlock()
 			})
@@ -371,13 +388,12 @@ func TestGetTx(t *testing.T) {
 	}
 }
 
-// Test method GetBalance
 func TestGetBalance(t *testing.T) {
 	require := require.New(t)
 	service, _ := defaultService(t)
 	defaultAddress(t, service)
-	service.vm.ctx.Lock.Lock()
 	defer func() {
+		service.vm.ctx.Lock.Lock()
 		require.NoError(service.vm.Shutdown(context.Background()))
 		service.vm.ctx.Lock.Unlock()
 	}()
@@ -405,8 +421,8 @@ func TestGetStake(t *testing.T) {
 	require := require.New(t)
 	service, _ := defaultService(t)
 	defaultAddress(t, service)
-	service.vm.ctx.Lock.Lock()
 	defer func() {
+		service.vm.ctx.Lock.Lock()
 		require.NoError(service.vm.Shutdown(context.Background()))
 		service.vm.ctx.Lock.Unlock()
 	}()
@@ -474,6 +490,8 @@ func TestGetStake(t *testing.T) {
 
 	oldStake := defaultWeight
 
+	service.vm.ctx.Lock.Lock()
+
 	// Add a delegator
 	stakeAmount := service.vm.MinDelegatorStake + 12345
 	delegatorNodeID := ids.NodeID(keys[0].PublicKey().Address())
@@ -500,6 +518,8 @@ func TestGetStake(t *testing.T) {
 	service.vm.state.AddTx(tx, status.Committed)
 	require.NoError(service.vm.state.Commit())
 
+	service.vm.ctx.Lock.Unlock()
+
 	// Make sure the delegator addr has the right stake (old stake + stakeAmount)
 	addr, _ := service.addrManager.FormatLocalAddress(keys[0].PublicKey().Address())
 	args.Addresses = []string{addr}
@@ -520,6 +540,8 @@ func TestGetStake(t *testing.T) {
 	require.Equal(stakeAmount+oldStake, outputs[0].Out.Amount()+outputs[1].Out.Amount())
 
 	oldStake = uint64(response.Staked)
+
+	service.vm.ctx.Lock.Lock()
 
 	// Make sure this works for pending stakers
 	// Add a pending staker
@@ -548,6 +570,8 @@ func TestGetStake(t *testing.T) {
 	service.vm.state.AddTx(tx, status.Committed)
 	require.NoError(service.vm.state.Commit())
 
+	service.vm.ctx.Lock.Unlock()
+
 	// Make sure the delegator has the right stake (old stake + stakeAmount)
 	require.NoError(service.GetStake(nil, &args, &response))
 	require.Equal(oldStake+stakeAmount, uint64(response.Staked))
@@ -566,13 +590,12 @@ func TestGetStake(t *testing.T) {
 	require.Equal(stakeAmount+oldStake, outputs[0].Out.Amount()+outputs[1].Out.Amount()+outputs[2].Out.Amount())
 }
 
-// Test method GetCurrentValidators
 func TestGetCurrentValidators(t *testing.T) {
 	require := require.New(t)
 	service, _ := defaultService(t)
 	defaultAddress(t, service)
-	service.vm.ctx.Lock.Lock()
 	defer func() {
+		service.vm.ctx.Lock.Lock()
 		require.NoError(service.vm.Shutdown(context.Background()))
 		service.vm.ctx.Lock.Unlock()
 	}()
@@ -607,6 +630,8 @@ func TestGetCurrentValidators(t *testing.T) {
 	delegatorStartTime := uint64(defaultValidateStartTime.Unix())
 	delegatorEndTime := uint64(defaultValidateStartTime.Add(defaultMinStakingDuration).Unix())
 
+	service.vm.ctx.Lock.Lock()
+
 	delTx, err := service.vm.txBuilder.NewAddDelegatorTx(
 		stakeAmount,
 		delegatorStartTime,
@@ -628,6 +653,8 @@ func TestGetCurrentValidators(t *testing.T) {
 	service.vm.state.PutCurrentDelegator(staker)
 	service.vm.state.AddTx(delTx, status.Committed)
 	require.NoError(service.vm.state.Commit())
+
+	service.vm.ctx.Lock.Unlock()
 
 	// Call getCurrentValidators
 	args = GetCurrentValidatorsArgs{SubnetID: constants.PrimaryNetworkID}
@@ -666,6 +693,8 @@ func TestGetCurrentValidators(t *testing.T) {
 	}
 	require.True(found)
 
+	service.vm.ctx.Lock.Lock()
+
 	// Reward the delegator
 	tx, err := service.vm.txBuilder.NewRewardValidatorTx(delTx.ID())
 	require.NoError(err)
@@ -673,6 +702,8 @@ func TestGetCurrentValidators(t *testing.T) {
 	service.vm.state.DeleteCurrentDelegator(staker)
 	require.NoError(service.vm.state.SetDelegateeReward(staker.SubnetID, staker.NodeID, 100000))
 	require.NoError(service.vm.state.Commit())
+
+	service.vm.ctx.Lock.Unlock()
 
 	// Call getValidators
 	response = GetCurrentValidatorsReply{}
@@ -691,18 +722,23 @@ func TestGetCurrentValidators(t *testing.T) {
 func TestGetTimestamp(t *testing.T) {
 	require := require.New(t)
 	service, _ := defaultService(t)
-	service.vm.ctx.Lock.Lock()
 	defer func() {
+		service.vm.ctx.Lock.Lock()
 		require.NoError(service.vm.Shutdown(context.Background()))
 		service.vm.ctx.Lock.Unlock()
 	}()
 
 	reply := GetTimestampReply{}
 	require.NoError(service.GetTimestamp(nil, nil, &reply))
+
+	service.vm.ctx.Lock.Lock()
+
 	require.Equal(service.vm.state.GetTimestamp(), reply.Timestamp)
 
 	newTimestamp := reply.Timestamp.Add(time.Second)
 	service.vm.state.SetTimestamp(newTimestamp)
+
+	service.vm.ctx.Lock.Unlock()
 
 	require.NoError(service.GetTimestamp(nil, nil, &reply))
 	require.Equal(newTimestamp, reply.Timestamp)
@@ -728,16 +764,20 @@ func TestGetBlock(t *testing.T) {
 			require := require.New(t)
 			service, _ := defaultService(t)
 			service.vm.ctx.Lock.Lock()
-			defer service.vm.ctx.Lock.Unlock()
+			defer func() {
+				service.vm.ctx.Lock.Lock()
+				require.NoError(service.vm.Shutdown(context.Background()))
+				service.vm.ctx.Lock.Unlock()
+			}()
 
 			service.vm.Config.CreateAssetTxFee = 100 * defaultTxFee
 
 			// Make a block an accept it, then check we can get it.
 			tx, err := service.vm.txBuilder.NewCreateChainTx( // Test GetTx works for standard blocks
 				testSubnet1.ID(),
-				nil,
+				[]byte{},
 				constants.AVMID,
-				nil,
+				[]ids.ID{},
 				"chain name",
 				[]*secp256k1.PrivateKey{testSubnet1ControlKeys[0], testSubnet1ControlKeys[1]},
 				keys[0].PublicKey().Address(), // change addr
@@ -760,6 +800,8 @@ func TestGetBlock(t *testing.T) {
 			require.NoError(blk.Verify(context.Background()))
 			require.NoError(blk.Accept(context.Background()))
 
+			service.vm.ctx.Lock.Unlock()
+
 			args := api.GetBlockArgs{
 				BlockID:  blk.ID(),
 				Encoding: test.encoding,
@@ -769,15 +811,16 @@ func TestGetBlock(t *testing.T) {
 
 			switch {
 			case test.encoding == formatting.JSON:
-				require.IsType((*block.BanffStandardBlock)(nil), response.Block)
-				responseBlock := response.Block.(*block.BanffStandardBlock)
-				require.Equal(statelessBlock.ID(), responseBlock.ID())
-
-				_, err = stdjson.Marshal(response)
+				statelessBlock.InitCtx(service.vm.ctx)
+				expectedBlockJSON, err := stdjson.Marshal(statelessBlock)
 				require.NoError(err)
+				require.Equal(expectedBlockJSON, []byte(response.Block))
 			default:
-				decoded, _ := formatting.Decode(response.Encoding, response.Block.(string))
-				require.Equal(blk.Bytes(), decoded)
+				var blockStr string
+				require.NoError(stdjson.Unmarshal(response.Block, &blockStr))
+				responseBlockBytes, err := formatting.Decode(response.Encoding, blockStr)
+				require.NoError(err)
+				require.Equal(blk.Bytes(), responseBlockBytes)
 			}
 
 			require.Equal(test.encoding, response.Encoding)
@@ -996,11 +1039,15 @@ func TestServiceGetBlockByHeight(t *testing.T) {
 			reply := &api.GetBlockResponse{}
 			err := service.GetBlockByHeight(nil, args, reply)
 			require.ErrorIs(err, tt.expectedErr)
-			if tt.expectedErr == nil {
+			if tt.expectedErr != nil {
 				return
 			}
 			require.Equal(tt.encoding, reply.Encoding)
-			require.Equal(expected, reply.Block)
+
+			expectedJSON, err := stdjson.Marshal(expected)
+			require.NoError(err)
+
+			require.Equal(stdjson.RawMessage(expectedJSON), reply.Block)
 		})
 	}
 }

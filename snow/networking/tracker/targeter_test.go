@@ -11,6 +11,8 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/validators"
+	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/utils/logging"
 )
 
 // Assert fields are set correctly.
@@ -23,10 +25,11 @@ func TestNewTargeter(t *testing.T) {
 		MaxNonVdrUsage:     10,
 		MaxNonVdrNodeUsage: 10,
 	}
-	vdrs := validators.NewSet()
+	vdrs := validators.NewManager()
 	tracker := NewMockTracker(ctrl)
 
 	targeterIntf := NewTargeter(
+		logging.NoLog{},
 		config,
 		vdrs,
 		tracker,
@@ -46,9 +49,9 @@ func TestTarget(t *testing.T) {
 	vdrWeight := uint64(1)
 	totalVdrWeight := uint64(10)
 	nonVdr := ids.NodeID{2}
-	vdrs := validators.NewSet()
-	require.NoError(t, vdrs.Add(vdr, nil, ids.Empty, 1))
-	require.NoError(t, vdrs.Add(ids.GenerateTestNodeID(), nil, ids.Empty, totalVdrWeight-vdrWeight))
+	vdrs := validators.NewManager()
+	require.NoError(t, vdrs.AddStaker(constants.PrimaryNetworkID, vdr, nil, ids.Empty, 1))
+	require.NoError(t, vdrs.AddStaker(constants.PrimaryNetworkID, ids.GenerateTestNodeID(), nil, ids.Empty, totalVdrWeight-vdrWeight))
 
 	tracker := NewMockTracker(ctrl)
 	config := &TargeterConfig{
@@ -58,6 +61,7 @@ func TestTarget(t *testing.T) {
 	}
 
 	targeter := NewTargeter(
+		logging.NoLog{},
 		config,
 		vdrs,
 		tracker,

@@ -4,7 +4,6 @@
 package e2e_test
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -14,6 +13,11 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/avalanchego/tests"
+	"github.com/ava-labs/avalanchego/tests/e2e"
+	"github.com/ava-labs/avalanchego/tests/fixture"
+	"github.com/ava-labs/avalanchego/tests/fixture/testnet/local"
+
 	// ensure test packages are scanned by ginkgo
 	_ "github.com/ava-labs/avalanchego/tests/e2e/banff"
 	_ "github.com/ava-labs/avalanchego/tests/e2e/c"
@@ -22,12 +26,6 @@ import (
 	_ "github.com/ava-labs/avalanchego/tests/e2e/static-handlers"
 	_ "github.com/ava-labs/avalanchego/tests/e2e/x"
 	_ "github.com/ava-labs/avalanchego/tests/e2e/x/transfer"
-
-	"github.com/ava-labs/avalanchego/tests"
-	"github.com/ava-labs/avalanchego/tests/e2e"
-	"github.com/ava-labs/avalanchego/tests/fixture"
-	"github.com/ava-labs/avalanchego/tests/fixture/testnet"
-	"github.com/ava-labs/avalanchego/tests/fixture/testnet/local"
 
 	ginkgo "github.com/onsi/ginkgo/v2"
 )
@@ -76,36 +74,13 @@ var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {
 	// Load or create a test network
 	var network *local.LocalNetwork
 	if len(persistentNetworkDir) > 0 {
-		tests.Outf("{{yellow}}Using a pre-existing network configured at %s{{/}}\n", persistentNetworkDir)
+		tests.Outf("{{yellow}}Using a persistent network configured at %s{{/}}\n", persistentNetworkDir)
 
 		var err error
 		network, err = local.ReadNetwork(persistentNetworkDir)
 		require.NoError(err)
 	} else {
-		tests.Outf("{{magenta}}Starting network with %q{{/}}\n", avalancheGoExecPath)
-
-		ctx, cancel := context.WithTimeout(context.Background(), local.DefaultNetworkStartTimeout)
-		defer cancel()
-		var err error
-		network, err = local.StartNetwork(
-			ctx,
-			ginkgo.GinkgoWriter,
-			"", // Use the default path to ensure a predictable target for github's upload-artifact action
-			&local.LocalNetwork{
-				LocalConfig: local.LocalConfig{
-					ExecPath: avalancheGoExecPath,
-				},
-			},
-			testnet.DefaultNodeCount,
-			testnet.DefaultFundedKeyCount,
-		)
-		require.NoError(err)
-		ginkgo.DeferCleanup(func() {
-			tests.Outf("Shutting down network\n")
-			require.NoError(network.Stop())
-		})
-
-		tests.Outf("{{green}}Successfully started network{{/}}\n")
+		network = e2e.StartLocalNetwork(avalancheGoExecPath, e2e.DefaultNetworkDir)
 	}
 
 	uris := network.GetURIs()
