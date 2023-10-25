@@ -20,7 +20,11 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/version"
+
+	safemath "github.com/ava-labs/avalanchego/utils/math"
 )
+
+var _ common.StateSyncer = (*stateSyncer)(nil)
 
 // summary content as received from network, along with accumulated weight.
 type weightedSummary struct {
