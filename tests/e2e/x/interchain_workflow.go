@@ -6,8 +6,9 @@ package x
 import (
 	"math/big"
 
-	"github.com/ava-labs/coreth/plugin/evm"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/plugin/evm"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/tests/e2e"

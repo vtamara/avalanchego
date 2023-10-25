@@ -53,7 +53,6 @@ linters:
     # - goerr113
     - gofmt
     - gofumpt
-    - goimports
     # - gomnd
     - goprintffuncname
     - gosec
@@ -110,11 +109,10 @@ linters-settings:
       - default
       - blank
       - dot
+      - prefix(github.com/ava-labs)
       - prefix(github.com/ava-labs/avalanchego)
     skip-generated: true
     custom-order: true
-  goimports:
-    local-prefixes: github.com/ava-labs/avalanchego
   gosec:
     excludes:
       - G107 # Url provided to HTTP request as taint input https://securego.io/docs/rules/g107

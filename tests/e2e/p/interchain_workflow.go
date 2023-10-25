@@ -7,9 +7,10 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ava-labs/coreth/plugin/evm"
 	"github.com/spf13/cast"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/plugin/evm"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/config"
