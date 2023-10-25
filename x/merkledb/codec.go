@@ -61,6 +61,7 @@ type encoderDecoder interface {
 
 type encoder interface {
 	// Assumes [n] is non-nil.
+	dbNodeSize(n *node) int
 	encodeDBNode(n *node) []byte
 	// Assumes [hv] is non-nil.
 	encodeHashValues(n *node) []byte
@@ -80,12 +81,48 @@ func newCodec() encoderDecoder {
 type codecImpl struct {
 }
 
+func (c *codecImpl) dbNodeSize(n *node) int {
+	// total is storing the node's value + the factor number of children pointers + the child entries for n.childCount children
+	total := maybeByteSliceSize(n.value) + uintSize(uint64(len(n.children)))
+	// for each non-nil entry, we add the additional size of the child entry
+	for index, entry := range n.children {
+		total += childSize(index, entry)
+	}
+	return total
+}
+
+func childSize(index byte, childEntry *child) int {
+	return uintSize(uint64(index)) + len(ids.Empty) + keySize(childEntry.compressedKey) + boolSize()
+}
+
+func maybeByteSliceSize(maybeValue maybe.Maybe[[]byte]) int {
+	if maybeValue.HasValue() {
+		return 1 + len(maybeValue.Value()) + uintSize(uint64(len(maybeValue.Value())))
+	}
+	return 1
+}
+
+func boolSize() int {
+	return 1
+}
+
+var log128 = math.Log(128)
+
+func uintSize(value uint64) int {
+	if value == 0 {
+		return 1
+	}
+	return 1 + int(math.Log(float64(value))/log128)
+}
+
+func keySize(p Key) int {
+	return uintSize(uint64(p.length)) + bytesNeeded(p.length)
+}
+
 func (c *codecImpl) encodeDBNode(n *node) []byte {
 	var (
 		numChildren = len(n.children)
-		// Estimate size of [n] to prevent memory allocations
-		estimatedLen = estimatedValueLen + minVarIntLen + estimatedNodeChildLen*numChildren
-		buf          = bytes.NewBuffer(make([]byte, 0, estimatedLen))
+		buf         = bytes.NewBuffer(make([]byte, 0, c.dbNodeSize(n)))
 	)
 
 	c.encodeMaybeByteSlice(buf, n.value)
