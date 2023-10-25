@@ -4,13 +4,14 @@
 package health
 
 import (
-	stdjson "encoding/json"
 	"net/http"
 
 	"github.com/gorilla/rpc/v2"
 
 	"github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ava-labs/avalanchego/utils/logging"
+
+	stdjson "encoding/json"
 )
 
 // NewGetAndPostHandler returns a health handler that supports GET and jsonrpc

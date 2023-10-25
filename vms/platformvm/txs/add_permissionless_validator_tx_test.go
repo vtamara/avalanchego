@@ -5,7 +5,6 @@ package txs
 
 import (
 	"encoding/hex"
-	stdmath "math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,6 +24,8 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/stakeable"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/avalanchego/vms/types"
+
+	stdmath "math"
 )
 
 func TestAddPermissionlessPrimaryValidator(t *testing.T) {

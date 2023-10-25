@@ -10,8 +10,9 @@ import (
 
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	connpb "github.com/ava-labs/avalanchego/proto/pb/net/conn"
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm/grpcutils"
+
+	connpb "github.com/ava-labs/avalanchego/proto/pb/net/conn"
 )
 
 var _ connpb.ConnServer = (*Server)(nil)

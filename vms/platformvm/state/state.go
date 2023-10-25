@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	stdmath "math"
 	"sync"
 	"time"
 
@@ -43,6 +42,8 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
 	"github.com/ava-labs/avalanchego/vms/platformvm/status"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
+
+	stdmath "math"
 )
 
 const (

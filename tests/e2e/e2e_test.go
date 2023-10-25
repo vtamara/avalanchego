@@ -11,7 +11,6 @@ import (
 	"os"
 	"testing"
 
-	ginkgo "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 
@@ -29,6 +28,8 @@ import (
 	"github.com/ava-labs/avalanchego/tests/fixture"
 	"github.com/ava-labs/avalanchego/tests/fixture/testnet"
 	"github.com/ava-labs/avalanchego/tests/fixture/testnet/local"
+
+	ginkgo "github.com/onsi/ginkgo/v2"
 )
 
 func TestE2E(t *testing.T) {

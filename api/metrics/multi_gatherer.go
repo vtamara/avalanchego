@@ -9,8 +9,9 @@ import (
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
-	dto "github.com/prometheus/client_model/go"
 	"golang.org/x/exp/slices"
+
+	dto "github.com/prometheus/client_model/go"
 )
 
 var (

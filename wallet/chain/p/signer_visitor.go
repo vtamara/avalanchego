@@ -4,7 +4,6 @@
 package p
 
 import (
-	stdcontext "context"
 	"errors"
 	"fmt"
 
@@ -19,6 +18,8 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/stakeable"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+
+	stdcontext "context"
 )
 
 var (

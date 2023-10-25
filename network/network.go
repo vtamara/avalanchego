@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	gomath "math"
 	"net"
 	"strings"
 	"sync"
@@ -38,6 +37,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/version"
+
+	gomath "math"
 )
 
 const (

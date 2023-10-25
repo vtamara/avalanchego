@@ -6,7 +6,6 @@ package executor
 import (
 	"errors"
 	"fmt"
-	stdmath "math"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
@@ -15,6 +14,8 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/platformvm/state"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
+
+	stdmath "math"
 )
 
 var (

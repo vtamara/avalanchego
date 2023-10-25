@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+
 	statelessblock "github.com/ava-labs/avalanchego/vms/proposervm/block"
 )
 

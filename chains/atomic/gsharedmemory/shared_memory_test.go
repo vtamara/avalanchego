@@ -14,8 +14,9 @@ import (
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
-	sharedmemorypb "github.com/ava-labs/avalanchego/proto/pb/sharedmemory"
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm/grpcutils"
+
+	sharedmemorypb "github.com/ava-labs/avalanchego/proto/pb/sharedmemory"
 )
 
 func TestInterface(t *testing.T) {

@@ -12,11 +12,12 @@ import (
 	"testing"
 	"time"
 
-	runner_sdk "github.com/ava-labs/avalanche-network-runner-sdk"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 
 	"github.com/ava-labs/avalanchego/tests"
+
+	runner_sdk "github.com/ava-labs/avalanche-network-runner-sdk"
 )
 
 const DefaultTimeout = 2 * time.Minute

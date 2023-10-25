@@ -10,9 +10,10 @@ import (
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/encdb"
 	"github.com/ava-labs/avalanchego/database/rpcdb"
+	"github.com/ava-labs/avalanchego/vms/rpcchainvm/grpcutils"
+
 	keystorepb "github.com/ava-labs/avalanchego/proto/pb/keystore"
 	rpcdbpb "github.com/ava-labs/avalanchego/proto/pb/rpcdb"
-	"github.com/ava-labs/avalanchego/vms/rpcchainvm/grpcutils"
 )
 
 var _ keystore.BlockchainKeystore = (*Client)(nil)

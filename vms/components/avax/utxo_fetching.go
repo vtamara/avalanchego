@@ -10,8 +10,9 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils"
-	safemath "github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/set"
+
+	safemath "github.com/ava-labs/avalanchego/utils/math"
 )
 
 // GetBalance returns the current balance of [addrs]

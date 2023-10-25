@@ -6,7 +6,6 @@ package syncer
 import (
 	"context"
 	"fmt"
-	stdmath "math"
 
 	"go.uber.org/zap"
 
@@ -21,6 +20,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/version"
+
+	stdmath "math"
 )
 
 var _ common.StateSyncer = (*stateSyncer)(nil)

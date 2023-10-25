@@ -4,7 +4,6 @@
 package x
 
 import (
-	stdcontext "context"
 	"errors"
 	"fmt"
 
@@ -19,6 +18,8 @@ import (
 	"github.com/ava-labs/avalanchego/vms/propertyfx"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/avalanchego/wallet/subnet/primary/common"
+
+	stdcontext "context"
 )
 
 var (

@@ -4,7 +4,6 @@
 package sync
 
 import (
-	stdmath "math"
 	"math/rand"
 	"sync"
 	"time"
@@ -18,6 +17,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/version"
+
+	stdmath "math"
 )
 
 const (

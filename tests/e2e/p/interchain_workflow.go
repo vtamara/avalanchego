@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/plugin/evm"
-	ginkgo "github.com/onsi/ginkgo/v2"
 	"github.com/spf13/cast"
 	"github.com/stretchr/testify/require"
 
@@ -26,6 +25,8 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/avalanchego/wallet/subnet/primary/common"
+
+	ginkgo "github.com/onsi/ginkgo/v2"
 )
 
 var _ = e2e.DescribeXChain("[Interchain Workflow]", func() {

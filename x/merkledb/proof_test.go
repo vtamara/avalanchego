@@ -14,10 +14,11 @@ import (
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
-	pb "github.com/ava-labs/avalanchego/proto/pb/sync"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/utils/maybe"
 	"github.com/ava-labs/avalanchego/utils/set"
+
+	pb "github.com/ava-labs/avalanchego/proto/pb/sync"
 )
 
 func Test_Proof_Empty(t *testing.T) {

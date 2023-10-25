@@ -5,7 +5,6 @@ package common
 
 import (
 	"context"
-	stdmath "math"
 
 	"go.uber.org/zap"
 
@@ -13,6 +12,8 @@ import (
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/set"
+
+	stdmath "math"
 )
 
 const (

@@ -5,7 +5,6 @@ package platformvm
 
 import (
 	"context"
-	stdjson "encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -35,15 +34,17 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/version"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
-	vmkeystore "github.com/ava-labs/avalanchego/vms/components/keystore"
-	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
 	"github.com/ava-labs/avalanchego/vms/platformvm/block"
-	blockexecutor "github.com/ava-labs/avalanchego/vms/platformvm/block/executor"
 	"github.com/ava-labs/avalanchego/vms/platformvm/state"
 	"github.com/ava-labs/avalanchego/vms/platformvm/status"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
-	txexecutor "github.com/ava-labs/avalanchego/vms/platformvm/txs/executor"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+
+	stdjson "encoding/json"
+	vmkeystore "github.com/ava-labs/avalanchego/vms/components/keystore"
+	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
+	blockexecutor "github.com/ava-labs/avalanchego/vms/platformvm/block/executor"
+	txexecutor "github.com/ava-labs/avalanchego/vms/platformvm/txs/executor"
 )
 
 var (

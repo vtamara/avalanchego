@@ -7,8 +7,9 @@ import (
 	"context"
 
 	"github.com/ava-labs/avalanchego/ids"
-	pb "github.com/ava-labs/avalanchego/proto/pb/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
+
+	pb "github.com/ava-labs/avalanchego/proto/pb/warp"
 )
 
 var _ pb.SignerServer = (*Server)(nil)

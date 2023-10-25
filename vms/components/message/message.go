@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ava-labs/avalanchego/ids"
+
 	pb "github.com/ava-labs/avalanchego/proto/pb/message"
 )
 

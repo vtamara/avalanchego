@@ -5,7 +5,6 @@ package avm
 
 import (
 	"context"
-	stdjson "encoding/json"
 	"errors"
 	"math/rand"
 	"testing"
@@ -34,9 +33,11 @@ import (
 	"github.com/ava-labs/avalanchego/vms/avm/fxs"
 	"github.com/ava-labs/avalanchego/vms/avm/txs"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
-	keystoreutils "github.com/ava-labs/avalanchego/vms/components/keystore"
 	"github.com/ava-labs/avalanchego/vms/nftfx"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+
+	stdjson "encoding/json"
+	keystoreutils "github.com/ava-labs/avalanchego/vms/components/keystore"
 )
 
 const (

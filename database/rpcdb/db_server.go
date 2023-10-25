@@ -12,8 +12,9 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/ava-labs/avalanchego/database"
-	rpcdbpb "github.com/ava-labs/avalanchego/proto/pb/rpcdb"
 	"github.com/ava-labs/avalanchego/utils/units"
+
+	rpcdbpb "github.com/ava-labs/avalanchego/proto/pb/rpcdb"
 )
 
 const iterationBatchSize = 128 * units.KiB

@@ -6,12 +6,12 @@ package ledger
 import (
 	"fmt"
 
-	ledger "github.com/ava-labs/ledger-avalanche/go"
-
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/crypto/keychain"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/version"
+
+	ledger "github.com/ava-labs/ledger-avalanche/go"
 )
 
 const (

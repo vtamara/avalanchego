@@ -5,7 +5,6 @@ package set
 
 import (
 	"bytes"
-	stdjson "encoding/json"
 
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
@@ -15,6 +14,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/sampler"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+
+	stdjson "encoding/json"
 )
 
 var _ stdjson.Marshaler = (*Set[int])(nil)

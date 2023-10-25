@@ -5,13 +5,14 @@ package set
 
 import (
 	"bytes"
-	stdjson "encoding/json"
 
 	"golang.org/x/exp/maps"
 
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+
+	stdjson "encoding/json"
 )
 
 // The minimum capacity of a set

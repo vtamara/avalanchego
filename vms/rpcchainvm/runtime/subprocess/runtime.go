@@ -15,11 +15,12 @@ import (
 
 	"go.uber.org/zap"
 
-	pb "github.com/ava-labs/avalanchego/proto/pb/vm/runtime"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm/grpcutils"
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm/gruntime"
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm/runtime"
+
+	pb "github.com/ava-labs/avalanchego/proto/pb/vm/runtime"
 )
 
 type Config struct {

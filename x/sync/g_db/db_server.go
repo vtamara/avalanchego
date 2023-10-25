@@ -10,10 +10,11 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/ava-labs/avalanchego/ids"
-	pb "github.com/ava-labs/avalanchego/proto/pb/sync"
 	"github.com/ava-labs/avalanchego/utils/maybe"
 	"github.com/ava-labs/avalanchego/x/merkledb"
 	"github.com/ava-labs/avalanchego/x/sync"
+
+	pb "github.com/ava-labs/avalanchego/proto/pb/sync"
 )
 
 var _ pb.DBServer = (*DBServer)(nil)

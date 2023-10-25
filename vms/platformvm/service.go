@@ -5,10 +5,8 @@ package platformvm
 
 import (
 	"context"
-	stdjson "encoding/json"
 	"errors"
 	"fmt"
-	stdmath "math"
 	"net/http"
 	"time"
 
@@ -32,7 +30,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/keystore"
-	platformapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
 	"github.com/ava-labs/avalanchego/vms/platformvm/fx"
 	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
 	"github.com/ava-labs/avalanchego/vms/platformvm/signer"
@@ -43,6 +40,10 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs/builder"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs/executor"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+
+	stdjson "encoding/json"
+	platformapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
+	stdmath "math"
 )
 
 const (

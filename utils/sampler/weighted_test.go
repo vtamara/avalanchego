@@ -5,12 +5,13 @@ package sampler
 
 import (
 	"fmt"
-	stdmath "math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/utils/math"
+
+	stdmath "math"
 )
 
 var (

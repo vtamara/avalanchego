@@ -9,9 +9,10 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/ava-labs/avalanchego/ids"
-	appsenderpb "github.com/ava-labs/avalanchego/proto/pb/appsender"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/set"
+
+	appsenderpb "github.com/ava-labs/avalanchego/proto/pb/appsender"
 )
 
 var _ appsenderpb.AppSenderServer = (*Server)(nil)

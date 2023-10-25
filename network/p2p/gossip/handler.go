@@ -8,7 +8,6 @@ import (
 	"errors"
 	"time"
 
-	bloomfilter "github.com/holiman/bloomfilter/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/protobuf/proto"
 
@@ -16,6 +15,8 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/proto/pb/sdk"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+
+	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 var (

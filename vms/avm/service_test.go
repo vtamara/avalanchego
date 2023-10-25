@@ -5,7 +5,6 @@ package avm
 
 import (
 	"context"
-	stdjson "encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -40,6 +39,8 @@ import (
 	"github.com/ava-labs/avalanchego/vms/nftfx"
 	"github.com/ava-labs/avalanchego/vms/propertyfx"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+
+	stdjson "encoding/json"
 )
 
 func TestServiceIssueTx(t *testing.T) {

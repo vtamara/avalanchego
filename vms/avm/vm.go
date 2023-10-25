@@ -5,7 +5,6 @@ package avm
 
 import (
 	"context"
-	stdjson "encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -32,21 +31,23 @@ import (
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/version"
 	"github.com/ava-labs/avalanchego/vms/avm/block"
-	blockbuilder "github.com/ava-labs/avalanchego/vms/avm/block/builder"
-	blockexecutor "github.com/ava-labs/avalanchego/vms/avm/block/executor"
 	"github.com/ava-labs/avalanchego/vms/avm/config"
-	extensions "github.com/ava-labs/avalanchego/vms/avm/fxs"
 	"github.com/ava-labs/avalanchego/vms/avm/metrics"
 	"github.com/ava-labs/avalanchego/vms/avm/network"
 	"github.com/ava-labs/avalanchego/vms/avm/states"
 	"github.com/ava-labs/avalanchego/vms/avm/txs"
-	txexecutor "github.com/ava-labs/avalanchego/vms/avm/txs/executor"
 	"github.com/ava-labs/avalanchego/vms/avm/txs/mempool"
 	"github.com/ava-labs/avalanchego/vms/avm/utxo"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/index"
 	"github.com/ava-labs/avalanchego/vms/components/keystore"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+
+	stdjson "encoding/json"
+	blockbuilder "github.com/ava-labs/avalanchego/vms/avm/block/builder"
+	blockexecutor "github.com/ava-labs/avalanchego/vms/avm/block/executor"
+	extensions "github.com/ava-labs/avalanchego/vms/avm/fxs"
+	txexecutor "github.com/ava-labs/avalanchego/vms/avm/txs/executor"
 )
 
 const assetToFxCacheSize = 1024

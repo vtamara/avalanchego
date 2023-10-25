@@ -7,11 +7,12 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/plugin/evm"
-	ethcommon "github.com/ethereum/go-ethereum/common"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/avalanchego/wallet/subnet/primary/common"
+
+	ethcommon "github.com/ethereum/go-ethereum/common"
 )
 
 var _ Builder = (*builderWithOptions)(nil)

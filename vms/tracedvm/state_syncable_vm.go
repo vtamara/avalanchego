@@ -7,9 +7,10 @@ import (
 	"context"
 
 	"go.opentelemetry.io/otel/attribute"
-	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+
+	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 func (vm *blockVM) StateSyncEnabled(ctx context.Context) (bool, error) {

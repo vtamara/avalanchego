@@ -13,11 +13,12 @@ import (
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/avm/block"
-	blockexecutor "github.com/ava-labs/avalanchego/vms/avm/block/executor"
 	"github.com/ava-labs/avalanchego/vms/avm/states"
 	"github.com/ava-labs/avalanchego/vms/avm/txs"
-	txexecutor "github.com/ava-labs/avalanchego/vms/avm/txs/executor"
 	"github.com/ava-labs/avalanchego/vms/avm/txs/mempool"
+
+	blockexecutor "github.com/ava-labs/avalanchego/vms/avm/block/executor"
+	txexecutor "github.com/ava-labs/avalanchego/vms/avm/txs/executor"
 )
 
 // targetBlockSize is the max block size we aim to produce

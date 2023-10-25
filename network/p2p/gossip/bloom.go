@@ -8,9 +8,9 @@ import (
 	"encoding/binary"
 	"hash"
 
-	bloomfilter "github.com/holiman/bloomfilter/v2"
-
 	"github.com/ava-labs/avalanchego/ids"
+
+	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 var _ hash.Hash64 = (*hasher)(nil)

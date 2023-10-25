@@ -5,7 +5,6 @@ package state
 
 import (
 	"context"
-	stdmath "math"
 	"testing"
 	"time"
 
@@ -32,6 +31,8 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+
+	stdmath "math"
 )
 
 var (
