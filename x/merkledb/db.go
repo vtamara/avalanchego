@@ -1280,10 +1280,10 @@ func getBufferFromPool(bufferPool *sync.Pool, size int) []byte {
 
 // cacheEntrySize returns a rough approximation of the memory consumed by storing the key and node
 func cacheEntrySize(key Key, n *node) int {
-	base := len(key.Bytes()) + 100
+	base := 2*len(key.Bytes()) + 100
 	if n == nil {
 		return base
 	}
 	// nodes cache their bytes representation so the total memory consumed is roughly twice that
-	return base + codec.dbNodeSize(&n.dbNode)
+	return base + 2*codec.dbNodeSize(&n.dbNode)
 }
