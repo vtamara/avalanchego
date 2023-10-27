@@ -17,7 +17,7 @@ const HashLength = 32
 // Representation of a node stored in the database.
 type dbNode struct {
 	value    maybe.Maybe[[]byte]
-	children map[byte]child
+	children map[byte]*child
 }
 
 type child struct {
@@ -40,7 +40,7 @@ type node struct {
 func newNode(key Key) *node {
 	return &node{
 		dbNode: dbNode{
-			children: make(map[byte]child, 2),
+			children: make(map[byte]*child, 2),
 		},
 		key: key,
 	}
@@ -115,7 +115,7 @@ func (n *node) setValueDigest() {
 func (n *node) addChild(tc *TokenConfiguration, childNode *node) {
 	n.setChildEntry(
 		tc.Token(childNode.key, n.key.length),
-		child{
+		&child{
 			compressedKey: childNode.key.Skip(n.key.length + tc.bitsPerToken),
 			id:            childNode.id,
 			hasValue:      childNode.hasValue(),
@@ -124,7 +124,7 @@ func (n *node) addChild(tc *TokenConfiguration, childNode *node) {
 }
 
 // Adds a child to [n] without a reference to the child node.
-func (n *node) setChildEntry(index byte, childEntry child) {
+func (n *node) setChildEntry(index byte, childEntry *child) {
 	n.onNodeChanged()
 	n.children[index] = childEntry
 }

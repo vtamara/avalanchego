@@ -266,11 +266,8 @@ func (t *trieView) calculateNodeIDs(ctx context.Context) error {
 // Calculates the ID of all descendants of [n] which need to be recalculated,
 // and then calculates the ID of [n] itself.
 func (t *trieView) calculateNodeIDsHelper(n *node) {
-	var (
-		// We use [wg] to wait until all descendants of [n] have been updated.
-		wg              sync.WaitGroup
-		updatedChildren = make(chan *node, len(n.children))
-	)
+	// We use [wg] to wait until all descendants of [n] have been updated.
+	var wg sync.WaitGroup
 
 	for childIndex, child := range n.children {
 		childPath := n.key.DoubleExtend(t.tokenConfig.ToKey(childIndex), child.compressedKey)
@@ -280,21 +277,22 @@ func (t *trieView) calculateNodeIDsHelper(n *node) {
 			continue
 		}
 
-		wg.Add(1)
 		calculateChildID := func() {
-			defer wg.Done()
 
 			t.calculateNodeIDsHelper(childNodeChange.after)
 
-			// Note that this will never block
-			updatedChildren <- childNodeChange.after
+			entry := n.children[t.tokenConfig.Token(childNodeChange.after.key, n.key.length)]
+			entry.id = childNodeChange.after.id
+			entry.hasValue = childNodeChange.after.hasValue()
 		}
 
 		// Try updating the child and its descendants in a goroutine.
 		if ok := t.db.calculateNodeIDsSema.TryAcquire(1); ok {
+			wg.Add(1)
 			go func() {
 				calculateChildID()
 				t.db.calculateNodeIDsSema.Release(1)
+				wg.Done()
 			}()
 		} else {
 			// We're at the goroutine limit; do the work in this goroutine.
@@ -304,16 +302,6 @@ func (t *trieView) calculateNodeIDsHelper(n *node) {
 
 	// Wait until all descendants of [n] have been updated.
 	wg.Wait()
-	close(updatedChildren)
-
-	for updatedChild := range updatedChildren {
-		index := t.tokenConfig.Token(updatedChild.key, n.key.length)
-		n.setChildEntry(index, child{
-			compressedKey: n.children[index].compressedKey,
-			id:            updatedChild.id,
-			hasValue:      updatedChild.hasValue(),
-		})
-	}
 
 	// The IDs [n]'s descendants are up to date so we can calculate [n]'s ID.
 	n.calculateID(t.db.metrics)
@@ -688,7 +676,7 @@ func (t *trieView) compressNodePath(parent, node *node) error {
 	}
 
 	var (
-		childEntry child
+		childEntry *child
 		childKey   Key
 	)
 	// There is only one child, but we don't know the index.
@@ -702,7 +690,7 @@ func (t *trieView) compressNodePath(parent, node *node) error {
 	// [node] is the first node with multiple children.
 	// combine it with the [node] passed in.
 	parent.setChildEntry(t.tokenConfig.Token(childKey, parent.key.length),
-		child{
+		&child{
 			compressedKey: childKey.Skip(parent.key.length + t.tokenConfig.bitsPerToken),
 			id:            childEntry.id,
 			hasValue:      childEntry.hasValue,
@@ -844,7 +832,7 @@ func (t *trieView) insert(
 	// add the existing child onto the branch node
 	branchNode.setChildEntry(
 		t.tokenConfig.Token(existingChildEntry.compressedKey, commonPrefixLength),
-		child{
+		&child{
 			compressedKey: existingChildEntry.compressedKey.Skip(commonPrefixLength + t.tokenConfig.bitsPerToken),
 			id:            existingChildEntry.id,
 			hasValue:      existingChildEntry.hasValue,
