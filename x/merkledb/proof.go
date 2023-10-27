@@ -31,8 +31,6 @@ var (
 	ErrNonIncreasingValues         = errors.New("keys sent are not in increasing order")
 	ErrStateFromOutsideOfRange     = errors.New("state key falls outside of the start->end range")
 	ErrNonIncreasingProofNodes     = errors.New("each proof node key must be a strict prefix of the next")
-	ErrExtraProofNodes             = errors.New("extra proof nodes in path")
-	ErrDataInMissingRootProof      = errors.New("there should be no state or deleted keys in a change proof that had a missing root")
 	ErrNoMerkleProof               = errors.New("empty key response must include merkle proof")
 	ErrShouldJustBeRoot            = errors.New("end proof should only contain root")
 	ErrNoStartProof                = errors.New("no start proof")
@@ -42,7 +40,6 @@ var (
 	ErrProofValueDoesntMatch       = errors.New("the provided value does not match the proof node for the provided key's value")
 	ErrProofNodeHasUnincludedValue = errors.New("the provided proof has a value for a key within the range that is not present in the provided key/values")
 	ErrInvalidMaybe                = errors.New("maybe is nothing but has value")
-	ErrInvalidChildIndex           = errors.New("child index must be less than branch factor")
 	ErrNilProofNode                = errors.New("proof node is nil")
 	ErrNilValueOrHash              = errors.New("proof node's valueOrHash field is nil")
 	ErrNilKey                      = errors.New("key is nil")
@@ -69,7 +66,7 @@ type ProofNode struct {
 func (node *ProofNode) ToProto() *pb.ProofNode {
 	pbNode := &pb.ProofNode{
 		Key: &pb.Key{
-			Length: uint64(node.Key.bitLength),
+			Length: uint64(node.Key.length),
 			Value:  node.Key.Bytes(),
 		},
 		ValueOrHash: &pb.MaybeBytes{
@@ -87,7 +84,7 @@ func (node *ProofNode) ToProto() *pb.ProofNode {
 	return pbNode
 }
 
-func (node *ProofNode) UnmarshalProto(tc TokenConfiguration, pbNode *pb.ProofNode) error {
+func (node *ProofNode) UnmarshalProto(pbNode *pb.ProofNode) error {
 	switch {
 	case pbNode == nil:
 		return ErrNilProofNode
@@ -98,16 +95,16 @@ func (node *ProofNode) UnmarshalProto(tc TokenConfiguration, pbNode *pb.ProofNod
 	case pbNode.Key == nil:
 		return ErrNilKey
 	}
-	node.Key = ToKey(pbNode.Key.Value).Take(tc, int(pbNode.Key.Length/uint64(tc.TokenBitSize())))
+	node.Key = ToKey(pbNode.Key.Value).Take(int(pbNode.Key.Length))
 
-	if len(node.Key.value) != bytesNeeded(node.Key.bitLength) {
+	if len(node.Key.value) != bytesNeeded(node.Key.length) {
 		return ErrInvalidKeyLength
 	}
 
 	node.Children = make(map[byte]ids.ID, len(pbNode.Children))
 	for childIndex, childIDBytes := range pbNode.Children {
-		if childIndex >= uint32(tc.BranchFactor()) {
-			return ErrInvalidChildIndex
+		if childIndex > math.MaxUint8 {
+			return ErrChildIndexTooLarge
 		}
 		childID, err := ids.ToID(childIDBytes)
 		if err != nil {
@@ -123,7 +120,7 @@ func (node *ProofNode) UnmarshalProto(tc TokenConfiguration, pbNode *pb.ProofNod
 	return nil
 }
 
-// An inclusion/exclustion proof of a key.
+// Proof represents an inclusion/exclusion proof of a key.
 type Proof struct {
 	// Nodes in the proof path from root --> target key
 	// (or node that would be where key is if it doesn't exist).
@@ -140,12 +137,12 @@ type Proof struct {
 // Returns nil if the trie given in [proof] has root [expectedRootID].
 // That is, this is a valid proof that [proof.Key] exists/doesn't exist
 // in the trie with root [expectedRootID].
-func (proof *Proof) Verify(ctx context.Context, tc TokenConfiguration, expectedRootID ids.ID) error {
+func (proof *Proof) Verify(ctx context.Context, expectedRootID ids.ID, tokenSize int) error {
 	// Make sure the proof is well-formed.
 	if len(proof.Path) == 0 {
 		return ErrNoProof
 	}
-	if err := verifyProofPath(tc, proof.Path, maybe.Some(proof.Key)); err != nil {
+	if err := verifyProofPath(proof.Path, maybe.Some(proof.Key)); err != nil {
 		return err
 	}
 
@@ -172,7 +169,7 @@ func (proof *Proof) Verify(ctx context.Context, tc TokenConfiguration, expectedR
 	}
 
 	// Don't bother locking [view] -- nobody else has a reference to it.
-	view, err := getStandaloneTrieView(ctx, nil, tc)
+	view, err := getStandaloneTrieView(ctx, nil, tokenSize)
 	if err != nil {
 		return err
 	}
@@ -215,7 +212,7 @@ func (proof *Proof) ToProto() *pb.Proof {
 	return pbProof
 }
 
-func (proof *Proof) UnmarshalProto(tc TokenConfiguration, pbProof *pb.Proof) error {
+func (proof *Proof) UnmarshalProto(pbProof *pb.Proof) error {
 	switch {
 	case pbProof == nil:
 		return ErrNilProof
@@ -233,7 +230,7 @@ func (proof *Proof) UnmarshalProto(tc TokenConfiguration, pbProof *pb.Proof) err
 
 	proof.Path = make([]ProofNode, len(pbProof.Proof))
 	for i, pbNode := range pbProof.Proof {
-		if err := proof.Path[i].UnmarshalProto(tc, pbNode); err != nil {
+		if err := proof.Path[i].UnmarshalProto(pbNode); err != nil {
 			return err
 		}
 	}
@@ -284,10 +281,10 @@ type RangeProof struct {
 //	If [end] is Nothing, all keys are considered < [end].
 func (proof *RangeProof) Verify(
 	ctx context.Context,
-	tc TokenConfiguration,
 	start maybe.Maybe[[]byte],
 	end maybe.Maybe[[]byte],
 	expectedRootID ids.ID,
+	tokenSize int,
 ) error {
 	switch {
 	case start.HasValue() && end.HasValue() && bytes.Compare(start.Value(), end.Value()) > 0:
@@ -333,7 +330,7 @@ func (proof *RangeProof) Verify(
 
 	// Ensure that the start proof is valid and contains values that
 	// match the key/values that were sent.
-	if err := verifyProofPath(tc, proof.StartProof, smallestProvenPath); err != nil {
+	if err := verifyProofPath(proof.StartProof, smallestProvenPath); err != nil {
 		return err
 	}
 	if err := verifyAllRangeProofKeyValuesPresent(
@@ -347,7 +344,7 @@ func (proof *RangeProof) Verify(
 
 	// Ensure that the end proof is valid and contains values that
 	// match the key/values that were sent.
-	if err := verifyProofPath(tc, proof.EndProof, largestProvenPath); err != nil {
+	if err := verifyProofPath(proof.EndProof, largestProvenPath); err != nil {
 		return err
 	}
 	if err := verifyAllRangeProofKeyValuesPresent(
@@ -369,7 +366,7 @@ func (proof *RangeProof) Verify(
 	}
 
 	// Don't need to lock [view] because nobody else has a reference to it.
-	view, err := getStandaloneTrieView(ctx, ops, tc)
+	view, err := getStandaloneTrieView(ctx, ops, tokenSize)
 	if err != nil {
 		return err
 	}
@@ -433,21 +430,21 @@ func (proof *RangeProof) ToProto() *pb.RangeProof {
 	}
 }
 
-func (proof *RangeProof) UnmarshalProto(tc TokenConfiguration, pbProof *pb.RangeProof) error {
+func (proof *RangeProof) UnmarshalProto(pbProof *pb.RangeProof) error {
 	if pbProof == nil {
 		return ErrNilRangeProof
 	}
 
 	proof.StartProof = make([]ProofNode, len(pbProof.StartProof))
 	for i, protoNode := range pbProof.StartProof {
-		if err := proof.StartProof[i].UnmarshalProto(tc, protoNode); err != nil {
+		if err := proof.StartProof[i].UnmarshalProto(protoNode); err != nil {
 			return err
 		}
 	}
 
 	proof.EndProof = make([]ProofNode, len(pbProof.EndProof))
 	for i, protoNode := range pbProof.EndProof {
-		if err := proof.EndProof[i].UnmarshalProto(tc, protoNode); err != nil {
+		if err := proof.EndProof[i].UnmarshalProto(protoNode); err != nil {
 			return err
 		}
 	}
@@ -585,21 +582,21 @@ func (proof *ChangeProof) ToProto() *pb.ChangeProof {
 	}
 }
 
-func (proof *ChangeProof) UnmarshalProto(tc TokenConfiguration, pbProof *pb.ChangeProof) error {
+func (proof *ChangeProof) UnmarshalProto(pbProof *pb.ChangeProof) error {
 	if pbProof == nil {
 		return ErrNilChangeProof
 	}
 
 	proof.StartProof = make([]ProofNode, len(pbProof.StartProof))
 	for i, protoNode := range pbProof.StartProof {
-		if err := proof.StartProof[i].UnmarshalProto(tc, protoNode); err != nil {
+		if err := proof.StartProof[i].UnmarshalProto(protoNode); err != nil {
 			return err
 		}
 	}
 
 	proof.EndProof = make([]ProofNode, len(pbProof.EndProof))
 	for i, protoNode := range pbProof.EndProof {
-		if err := proof.EndProof[i].UnmarshalProto(tc, protoNode); err != nil {
+		if err := proof.EndProof[i].UnmarshalProto(protoNode); err != nil {
 			return err
 		}
 	}
@@ -736,17 +733,15 @@ func verifyKeyValues(kvs []KeyValue, start maybe.Maybe[[]byte], end maybe.Maybe[
 //   - Each key in [proof] is a strict prefix of [keyBytes], except possibly the last.
 //   - If the last element in [proof] is [Key], this is an inclusion proof.
 //     Otherwise, this is an exclusion proof and [keyBytes] must not be in [proof].
-func verifyProofPath(tc TokenConfiguration, proof []ProofNode, key maybe.Maybe[Key]) error {
+func verifyProofPath(proof []ProofNode, key maybe.Maybe[Key]) error {
 	if len(proof) == 0 {
 		return nil
 	}
 
 	// loop over all but the last node since it will not have the prefix in exclusion proofs
 	for i := 0; i < len(proof)-1; i++ {
-		nodeKey := proof[i].Key
-		if key.HasValue() && nodeKey.bitLength%tc.TokenBitSize() != 0 {
-			return ErrInconsistentBranchFactor
-		}
+		currentProofNode := proof[i]
+		nodeKey := currentProofNode.Key
 
 		// Because the interface only support []byte keys,
 		// a key with a partial byte should store a value
@@ -848,7 +843,7 @@ func addPathInfo(
 			if existingChild, ok := n.children[index]; ok {
 				compressedPath = existingChild.compressedKey
 			}
-			childPath := key.AppendExtend(t.tokenConfig, index, compressedPath)
+			childPath := key.Extend(ToToken(index, t.tokenSize), compressedPath)
 			if (shouldInsertLeftChildren && childPath.Less(insertChildrenLessThan.Value())) ||
 				(shouldInsertRightChildren && childPath.Greater(insertChildrenGreaterThan.Value())) {
 				// We didn't set the other values on the child entry, but it doesn't matter.
@@ -867,7 +862,7 @@ func addPathInfo(
 }
 
 // getStandaloneTrieView returns a new view that has nothing in it besides the changes due to [ops]
-func getStandaloneTrieView(ctx context.Context, ops []database.BatchOp, tc TokenConfiguration) (*trieView, error) {
+func getStandaloneTrieView(ctx context.Context, ops []database.BatchOp, size int) (*trieView, error) {
 	db, err := newDatabase(
 		ctx,
 		memdb.New(),
@@ -876,7 +871,7 @@ func getStandaloneTrieView(ctx context.Context, ops []database.BatchOp, tc Token
 			Tracer:                    trace.Noop,
 			ValueNodeCacheSize:        verificationCacheSize,
 			IntermediateNodeCacheSize: verificationCacheSize,
-			TokenConfig:               tc,
+			BranchFactor:              sizeToBf[size],
 		},
 		&mockMetrics{},
 	)

@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"sync"
 
+	"golang.org/x/exp/maps"
+
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 
@@ -102,9 +104,9 @@ type Manager struct {
 	cancelCtx context.CancelFunc
 
 	// Set to true when StartSyncing is called.
-	syncing     bool
-	closeOnce   sync.Once
-	tokenConfig merkledb.TokenConfiguration
+	syncing   bool
+	closeOnce sync.Once
+	tokenSize int
 }
 
 type ManagerConfig struct {
@@ -113,7 +115,7 @@ type ManagerConfig struct {
 	SimultaneousWorkLimit int
 	Log                   logging.Logger
 	TargetRoot            ids.ID
-	TokenConfig           merkledb.TokenConfiguration
+	BranchFactor          merkledb.BranchFactor
 }
 
 func NewManager(config ManagerConfig) (*Manager, error) {
@@ -127,7 +129,7 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 	case config.SimultaneousWorkLimit == 0:
 		return nil, ErrZeroWorkLimit
 	}
-	if err := config.TokenConfig.Valid(); err != nil {
+	if err := config.BranchFactor.Valid(); err != nil {
 		return nil, err
 	}
 
@@ -136,7 +138,7 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 		doneChan:        make(chan struct{}),
 		unprocessedWork: newWorkHeap(),
 		processedWork:   newWorkHeap(),
-		tokenConfig:     config.TokenConfig,
+		tokenSize:       merkledb.BranchFactorToTokenSize[config.BranchFactor],
 	}
 	m.unprocessedWorkCond.L = &m.workLock
 
@@ -447,7 +449,7 @@ func (m *Manager) findNextKey(
 
 		// select the deepest proof node from the two proofs
 		switch {
-		case receivedProofNode.Key.BitLength() > localProofNode.Key.BitLength():
+		case receivedProofNode.Key.Length() > localProofNode.Key.Length():
 			// there was a branch node in the received proof that isn't in the local proof
 			// see if the received proof node has children not present in the local proof
 			deepestNode = &receivedProofNode
@@ -455,7 +457,7 @@ func (m *Manager) findNextKey(
 			// we have dealt with this received node, so move on to the next received node
 			receivedProofNodeIndex--
 
-		case localProofNode.Key.BitLength() > receivedProofNode.Key.BitLength():
+		case localProofNode.Key.Length() > receivedProofNode.Key.Length():
 			// there was a branch node in the local proof that isn't in the received proof
 			// see if the local proof node has children not present in the received proof
 			deepestNode = &localProofNode
@@ -489,13 +491,13 @@ func (m *Manager) findNextKey(
 		// node's children have keys larger than [proofKeyPath].
 		// Any child with a token greater than the [proofKeyPath]'s token at that
 		// index will have a larger key.
-		if deepestNode.Key.BitLength() < proofKeyPath.BitLength() {
-			startingChildToken = int(proofKeyPath.Token(m.tokenConfig, m.tokenConfig.TokenLength(deepestNode.Key))) + 1
+		if deepestNode.Key.Length() < proofKeyPath.Length() {
+			startingChildToken = int(proofKeyPath.Token(deepestNode.Key.Length(), m.tokenSize)) + 1
 		}
 
 		// determine if there are any differences in the children for the deepest unhandled node of the two proofs
-		if childIndex, hasDifference := findChildDifference(m.tokenConfig, deepestNode, deepestNodeFromOtherProof, startingChildToken); hasDifference {
-			nextKey = maybe.Some(deepestNode.Key.Append(m.tokenConfig, childIndex).Bytes())
+		if childIndex, hasDifference := findChildDifference(deepestNode, deepestNodeFromOtherProof, startingChildToken); hasDifference {
+			nextKey = maybe.Some(deepestNode.Key.Extend(merkledb.ToToken(childIndex, m.tokenSize)).Bytes())
 			break
 		}
 	}
@@ -794,22 +796,40 @@ func midPoint(startMaybe, endMaybe maybe.Maybe[[]byte]) maybe.Maybe[[]byte] {
 
 // findChildDifference returns the first child index that is different between node 1 and node 2 if one exists and
 // a bool indicating if any difference was found
-func findChildDifference(tokenConfig merkledb.TokenConfiguration, node1, node2 *merkledb.ProofNode, startIndex int) (byte, bool) {
+func findChildDifference(node1, node2 *merkledb.ProofNode, startIndex int) (byte, bool) {
 	var (
 		child1, child2 ids.ID
 		ok1, ok2       bool
 	)
-	for childIndex := startIndex; childIndex < tokenConfig.BranchFactor(); childIndex++ {
+
+	keysUnion := map[byte]struct{}{}
+	if node1 != nil {
+		for key := range node1.Children {
+			if int(key) >= startIndex {
+				keysUnion[key] = struct{}{}
+			}
+		}
+	}
+	if node2 != nil {
+		for key := range node2.Children {
+			if int(key) >= startIndex {
+				keysUnion[key] = struct{}{}
+			}
+		}
+	}
+	keys := maps.Keys(keysUnion)
+	slices.Sort(keys)
+	for _, childIndex := range keys {
 		if node1 != nil {
-			child1, ok1 = node1.Children[byte(childIndex)]
+			child1, ok1 = node1.Children[childIndex]
 		}
 		if node2 != nil {
-			child2, ok2 = node2.Children[byte(childIndex)]
+			child2, ok2 = node2.Children[childIndex]
 		}
 		// if one node has a child and the other doesn't or the children ids don't match,
 		// return the current child index as the first difference
 		if (ok1 || ok2) && child1 != child2 {
-			return byte(childIndex), true
+			return childIndex, true
 		}
 	}
 	// there were no differences found

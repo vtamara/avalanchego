@@ -8,129 +8,131 @@ import (
 	"fmt"
 	"strings"
 	"unsafe"
+
+	"golang.org/x/exp/slices"
 )
 
 var (
-	ErrInvalidTokenConfig = errors.New("token configuration must match one of the predefined configurations ")
+	ErrInvalidBranchFactor = errors.New("branch factor must match one of the predefined branch factors")
 
-	BranchFactor2TokenConfig = TokenConfiguration{
-		branchFactor:    2,
-		tokenBitSize:    1,
-		tokensPerByte:   8,
-		singleTokenMask: 0b0000_0001,
+	validTokenSizes = []int{
+		1,
+		2,
+		4,
+		8,
 	}
-	BranchFactor4TokenConfig = TokenConfiguration{
-		branchFactor:    4,
-		tokenBitSize:    2,
-		tokensPerByte:   4,
-		singleTokenMask: 0b0000_0011,
+
+	validBranchFactors = []BranchFactor{
+		BranchFactor2,
+		BranchFactor4,
+		BranchFactor16,
+		BranchFactor256,
 	}
-	BranchFactor16TokenConfig = TokenConfiguration{
-		branchFactor:    16,
-		tokenBitSize:    4,
-		tokensPerByte:   2,
-		singleTokenMask: 0b0000_1111,
+
+	BranchFactor2   = BranchFactor(2)
+	BranchFactor4   = BranchFactor(4)
+	BranchFactor16  = BranchFactor(16)
+	BranchFactor256 = BranchFactor(256)
+
+	BranchFactorToTokenSize = map[BranchFactor]int{
+		BranchFactor2:   1,
+		BranchFactor4:   2,
+		BranchFactor16:  4,
+		BranchFactor256: 8,
 	}
-	BranchFactor256TokenConfig = TokenConfiguration{
-		branchFactor:    256,
-		tokenBitSize:    8,
-		tokensPerByte:   1,
-		singleTokenMask: 0b1111_1111,
-	}
-	validTokenConfigurations = []TokenConfiguration{
-		BranchFactor2TokenConfig,
-		BranchFactor4TokenConfig,
-		BranchFactor16TokenConfig,
-		BranchFactor256TokenConfig,
+
+	sizeToBf = map[int]BranchFactor{
+		1: BranchFactor2,
+		2: BranchFactor4,
+		4: BranchFactor16,
+		8: BranchFactor256,
 	}
 )
 
-type TokenConfiguration struct {
-	branchFactor    int
-	tokensPerByte   int
-	tokenBitSize    int
-	singleTokenMask byte
-}
+type BranchFactor int
 
-func (t TokenConfiguration) Valid() error {
-	for _, validConfig := range validTokenConfigurations {
-		if validConfig == t {
+func (b BranchFactor) Valid() error {
+	for _, validBF := range validBranchFactors {
+		if validBF == b {
 			return nil
 		}
 	}
-	return fmt.Errorf("%w: %d", ErrInvalidTokenConfig, t)
+	return fmt.Errorf("%w: %d", ErrInvalidBranchFactor, b)
 }
 
-func (t TokenConfiguration) BranchFactor() int {
-	return t.branchFactor
+// ToToken creates a key version of the passed byte with length equal to bitsPerToken
+func ToToken(val byte, tokenSize int) Key {
+	return Key{value: string([]byte{val << dualBitIndex(tokenSize)}), length: tokenSize}
 }
 
-func (t TokenConfiguration) TokensPerByte() int {
-	return t.tokensPerByte
+// Token returns the token at the specified index,
+// Assumes that bitindex + bitsPerToken doesn't cross a byte boundary
+func (k Key) Token(bitIndex int, tokenSize int) byte {
+	storageByte := k.value[bitIndex/8]
+	// Shift the byte right to get the token to the rightmost position.
+	storageByte >>= dualBitIndex((bitIndex + tokenSize) % 8)
+	// Apply a mask to remove any other tokens in the byte.
+	return storageByte & (0xFF >> dualBitIndex(tokenSize))
 }
 
-func (t TokenConfiguration) TokenBitSize() int {
-	return t.tokenBitSize
-}
-
-func (t TokenConfiguration) SingleTokenMask() byte {
-	return t.singleTokenMask
-}
-
-func (t TokenConfiguration) TokenLength(k Key) int {
-	return k.bitLength / t.tokenBitSize
-}
-
-func (t TokenConfiguration) BitLength(tokens int) int {
-	return tokens * t.tokenBitSize
+// iteratedHasPrefix checks if the provided prefix key is a prefix of the current key after having skipped [bitsToSkip] bits first
+// this has better performance than constructing the actual key via Skip() then calling HasPrefix because it avoids the []byte allocation
+func (k Key) iteratedHasPrefix(prefix Key, bitsToSkip int, tokenSize int) bool {
+	if k.length-bitsToSkip < prefix.length {
+		return false
+	}
+	for i := 0; i < prefix.length; i += tokenSize {
+		if k.Token(bitsToSkip+i, tokenSize) != prefix.Token(i, tokenSize) {
+			return false
+		}
+	}
+	return true
 }
 
 type Key struct {
-	bitLength int
-	value     string
+	// The number of bits in the key.
+	length int
+	value  string
 }
 
-// ToKey returns [keyBytes] as a new key with the given [branchFactor].
-// Assumes [branchFactor] is valid.
+// ToKey returns [keyBytes] as a new key
 func ToKey(keyBytes []byte) Key {
-	return Key{
-		value:     byteSliceToString(keyBytes),
-		bitLength: len(keyBytes) * 8,
-	}
+	return toKey(slices.Clone(keyBytes))
 }
 
-func bytesNeeded(bits int) int {
-	size := bits / 8
-	if bits%8 != 0 {
-		size++
+// toKey returns [keyBytes] as a new key
+// Caller must not modify [keyBytes] after this call.
+func toKey(keyBytes []byte) Key {
+	return Key{
+		value:  byteSliceToString(keyBytes),
+		length: len(keyBytes) * 8,
 	}
-	return size
 }
 
 // hasPartialByte returns true iff the key fits into a non-whole number of bytes
 func (k Key) hasPartialByte() bool {
-	return k.bitLength%8 > 0
+	return k.length%8 > 0
 }
 
 // HasPrefix returns true iff [prefix] is a prefix of [k] or equal to it.
 func (k Key) HasPrefix(prefix Key) bool {
 	// [prefix] must be shorter than [k] to be a prefix.
-	if k.bitLength < prefix.bitLength {
+	if k.length < prefix.length {
 		return false
 	}
 
 	// The number of tokens in the last byte of [prefix], or zero
 	// if [prefix] fits into a whole number of bytes.
-	remainderBitCount := prefix.getRemainderBits()
+	remainderBitCount := prefix.remainderBitCount()
 	if remainderBitCount == 0 {
 		return strings.HasPrefix(k.value, prefix.value)
 	}
 
 	// check that the tokens in the partially filled final byte of [prefix] are
 	// equal to the tokens in the final byte of [k].
-	remainderBitsMask := byte(0xFF << (8 - remainderBitCount))
-	prefixRemainderTokens := prefix.value[len(prefix.value)-1] & remainderBitsMask
-	remainderTokens := k.value[len(prefix.value)-1] & remainderBitsMask
+	remainderBitsMask := byte(0xFF >> remainderBitCount)
+	prefixRemainderTokens := prefix.value[len(prefix.value)-1] | remainderBitsMask
+	remainderTokens := k.value[len(prefix.value)-1] | remainderBitsMask
 
 	if prefixRemainderTokens != remainderTokens {
 		return false
@@ -149,114 +151,66 @@ func (k Key) HasStrictPrefix(prefix Key) bool {
 	return k != prefix && k.HasPrefix(prefix)
 }
 
-func (k Key) getRemainderBits() int {
-	return k.bitLength % 8
+func (k Key) remainderBitCount() int {
+	return k.length % 8
 }
 
-func (k Key) BitLength() int {
-	return k.bitLength
-}
-
-// Token returns the token at the specified index,
-func (k Key) Token(tc TokenConfiguration, index int) byte {
-	bitIndex := index * tc.TokenBitSize()
-	storageByte := k.value[bitIndex/8]
-	// Shift the byte right to get the token to the rightmost position.
-	storageByte >>= k.bitsToShift(tc, bitIndex)
-	// Apply a mask to remove any other tokens in the byte.
-	return storageByte & (0xFF >> (8 - tc.TokenBitSize()))
-}
-
-// Append returns a new Path that equals the current
-// Path with [token] appended to the end.
-func (k Key) Append(tc TokenConfiguration, token byte) Key {
-	buffer := make([]byte, bytesNeeded(k.bitLength+tc.TokenBitSize()))
-	k.appendIntoBuffer(tc, buffer, token)
-	return Key{
-		value:     byteSliceToString(buffer),
-		bitLength: k.bitLength + tc.TokenBitSize(),
-	}
+func (k Key) Length() int {
+	return k.length
 }
 
 // Greater returns true if current Key is greater than other Key
 func (k Key) Greater(other Key) bool {
-	return k.value > other.value || (k.value == other.value && k.bitLength > other.bitLength)
+	return k.value > other.value || (k.value == other.value && k.length > other.length)
 }
 
 // Less returns true if current Key is less than other Key
 func (k Key) Less(other Key) bool {
-	return k.value < other.value || (k.value == other.value && k.bitLength < other.bitLength)
+	return k.value < other.value || (k.value == other.value && k.length < other.length)
 }
 
-// bitsToShift returns the number of bits to right shift a token
-// within its storage byte to get it to the rightmost
-// position in the byte. Equivalently, this is the number of bits
-// to left shift a raw token value to get it to the correct position
-// within its storage byte.
-// Example with branch factor 16:
-// Suppose the token array is
-// [0x01, 0x02, 0x03, 0x04]
-// The byte representation of this array is
-// [0b0001_0010, 0b0011_0100]
-// To get the token at index 0 (0b0001) to the rightmost position
-// in its storage byte (i.e. to make 0b0001_0010 into 0b0000_0001),
-// we need to shift 0b0001_0010 to the right by 4 bits.
-// Similarly:
-// * Token at index 1 (0b0010) needs to be shifted by 0 bits
-// * Token at index 2 (0b0011) needs to be shifted by 4 bits
-// * Token at index 3 (0b0100) needs to be shifted by 0 bits
-func (k Key) bitsToShift(tc TokenConfiguration, bitIndex int) byte {
-	// [tokenIndex] is the index of the token in the byte.
-	// For example, if the branch factor is 16, then each byte contains 2 tokens.
-	// The first is at index 0, and the second is at index 1, by this definition.
-	startBitIndex := bitIndex % 8
-	// The bit within the byte that the token ends at.
-	endBitIndex := startBitIndex + tc.TokenBitSize()
-	// We want to right shift until [endBitIndex] is at the last index, so return
-	// the distance from the end of the byte to the end of the token.
-	// Note that 7 is the index of the last bit in a byte.
-	return 8 - byte(endBitIndex)
-}
-
-func (k Key) AppendExtend(tc TokenConfiguration, token byte, extensionKey Key) Key {
-	appendBytes := bytesNeeded(k.bitLength + tc.TokenBitSize())
-	totalBitLength := k.bitLength + tc.TokenBitSize() + extensionKey.bitLength
+func (k Key) Extend(keys ...Key) Key {
+	totalBitLength := k.length
+	for _, key := range keys {
+		totalBitLength += key.length
+	}
 	buffer := make([]byte, bytesNeeded(totalBitLength))
-	k.appendIntoBuffer(tc, buffer[:appendBytes], token)
-
-	result := Key{
-		value:     byteSliceToString(buffer),
-		bitLength: totalBitLength,
+	copy(buffer, k.value)
+	currentTotal := k.length
+	for _, key := range keys {
+		extendIntoBuffer(buffer, key, currentTotal)
+		currentTotal += key.length
 	}
 
-	// the extension path will be shifted based on the number of tokens in the partial byte
-	bitsRemainder := (k.bitLength + tc.TokenBitSize()) % 8
-
-	extensionBuffer := buffer[appendBytes-1:]
-	if extensionKey.bitLength == 0 {
-		return result
+	return Key{
+		value:  byteSliceToString(buffer),
+		length: totalBitLength,
 	}
+}
 
-	// If the existing value fits into a whole number of bytes,
-	// the extension path can be copied directly into the buffer.
+func extendIntoBuffer(buffer []byte, val Key, bitsOffset int) {
+	if val.length == 0 {
+		return
+	}
+	bytesOffset := bytesNeeded(bitsOffset)
+	bitsRemainder := bitsOffset % 8
 	if bitsRemainder == 0 {
-		copy(extensionBuffer[1:], extensionKey.value)
-		return result
+		copy(buffer[bytesOffset:], val.value)
+		return
 	}
 
 	// Fill the partial byte with the first [shift] bits of the extension path
-	extensionBuffer[0] |= extensionKey.value[0] >> bitsRemainder
+	buffer[bytesOffset-1] |= val.value[0] >> bitsRemainder
 
 	// copy the rest of the extension path bytes into the buffer,
 	// shifted byte shift bits
-	shiftCopy(extensionBuffer[1:], extensionKey.value, byte(8-bitsRemainder))
-
-	return result
+	shiftCopy(buffer[bytesOffset:], val.value, dualBitIndex(bitsRemainder))
 }
 
-func (k Key) appendIntoBuffer(tc TokenConfiguration, buffer []byte, token byte) {
-	copy(buffer, k.value)
-	buffer[len(buffer)-1] |= token << k.bitsToShift(tc, k.bitLength)
+// dualBitIndex gets the dual of the bit index
+// ex: in a byte, the bit 5 from the right is the same as the bit 3 from the left
+func dualBitIndex(shift int) int {
+	return (8 - shift) % 8
 }
 
 // Treats [src] as a bit array and copies it into [dst] shifted by [shift] bits.
@@ -265,10 +219,11 @@ func (k Key) appendIntoBuffer(tc TokenConfiguration, buffer []byte, token byte) 
 // Assumes len(dst) >= len(src)-1.
 // If len(dst) == len(src)-1 the last byte of [src] is only partially copied
 // (i.e. the rightmost bits are not copied).
-func shiftCopy(dst []byte, src string, shift byte) {
+func shiftCopy(dst []byte, src string, shift int) {
 	i := 0
+	dualShift := dualBitIndex(shift)
 	for ; i < len(src)-1; i++ {
-		dst[i] = src[i]<<shift | src[i+1]>>(8-shift)
+		dst[i] = src[i]<<shift | src[i+1]>>dualShift
 	}
 
 	if i < len(dst) {
@@ -279,14 +234,13 @@ func shiftCopy(dst []byte, src string, shift byte) {
 
 // Skip returns a new Key that contains the last
 // k.length-tokensToSkip tokens of [k].
-func (k Key) Skip(tc TokenConfiguration, tokensToSkip int) Key {
-	bitsToSkip := tc.BitLength(tokensToSkip)
-	if k.bitLength <= bitsToSkip {
+func (k Key) Skip(bitsToSkip int) Key {
+	if k.length <= bitsToSkip {
 		return Key{}
 	}
 	result := Key{
-		value:     k.value[bitsToSkip/8:],
-		bitLength: k.bitLength - bitsToSkip,
+		value:  k.value[bitsToSkip/8:],
+		length: k.length - bitsToSkip,
 	}
 
 	// if the tokens to skip is a whole number of bytes,
@@ -297,8 +251,8 @@ func (k Key) Skip(tc TokenConfiguration, tokensToSkip int) Key {
 
 	// tokensToSkip does not remove a whole number of bytes.
 	// copy the remaining shifted bytes into a new buffer.
-	buffer := make([]byte, bytesNeeded(result.bitLength))
-	bitsRemovedFromFirstRemainingByte := byte(bitsToSkip % 8)
+	buffer := make([]byte, bytesNeeded(result.length))
+	bitsRemovedFromFirstRemainingByte := bitsToSkip % 8
 	shiftCopy(buffer, result.value, bitsRemovedFromFirstRemainingByte)
 
 	result.value = byteSliceToString(buffer)
@@ -306,17 +260,16 @@ func (k Key) Skip(tc TokenConfiguration, tokensToSkip int) Key {
 }
 
 // Take returns a new Key that contains the first tokensToTake tokens of the current Key
-func (k Key) Take(tc TokenConfiguration, tokensToTake int) Key {
-	bitsToTake := tc.BitLength(tokensToTake)
-	if k.bitLength <= bitsToTake {
+func (k Key) Take(bitsToTake int) Key {
+	if k.length <= bitsToTake {
 		return k
 	}
 
 	result := Key{
-		bitLength: bitsToTake,
+		length: bitsToTake,
 	}
 
-	remainderBits := result.getRemainderBits()
+	remainderBits := result.remainderBitCount()
 	if remainderBits == 0 {
 		result.value = k.value[:bitsToTake/8]
 		return result
@@ -328,8 +281,8 @@ func (k Key) Take(tc TokenConfiguration, tokensToTake int) Key {
 	copy(buffer, k.value)
 
 	// We want to zero out everything to the right of the last token, which is at index [tokensToTake] - 1
-	// Mask will be (8-bitsToShift) number of 1's followed by (bitsToShift) number of 0's
-	buffer[len(buffer)-1] &= byte(0xFF << (8 - remainderBits))
+	// Mask will be (8-remainderBits) number of 1's followed by (remainderBits) number of 0's
+	buffer[len(buffer)-1] &= byte(0xFF << dualBitIndex(remainderBits))
 
 	result.value = byteSliceToString(buffer)
 	return result
@@ -341,20 +294,6 @@ func (k Key) Bytes() []byte {
 	// avoid copying during the conversion
 	// "safe" because we never edit the value, only used as DB key
 	return stringToByteSlice(k.value)
-}
-
-// iteratedHasPrefix checks if the provided prefix path is a prefix of the current path after having skipped [skipTokens] tokens first
-// this has better performance than constructing the actual path via Skip() then calling HasPrefix because it avoids the []byte allocation
-func (k Key) iteratedHasPrefix(tc TokenConfiguration, skipTokens int, prefix Key) bool {
-	if k.bitLength-tc.BitLength(skipTokens) < prefix.bitLength {
-		return false
-	}
-	for i := 0; i < tc.TokenLength(prefix); i++ {
-		if k.Token(tc, skipTokens+i) != prefix.Token(tc, i) {
-			return false
-		}
-	}
-	return true
 }
 
 // byteSliceToString converts the []byte to a string
@@ -371,4 +310,13 @@ func stringToByteSlice(value string) []byte {
 	// avoid copying during the conversion
 	// "safe" because we never edit the []byte
 	return unsafe.Slice(unsafe.StringData(value), len(value))
+}
+
+// Returns the number of bytes needed to store [bits] bits.
+func bytesNeeded(bits int) int {
+	size := bits / 8
+	if bits%8 != 0 {
+		size++
+	}
+	return size
 }

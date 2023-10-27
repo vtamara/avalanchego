@@ -47,9 +47,9 @@ func newNode(key Key) *node {
 }
 
 // Parse [nodeBytes] to a node and set its key to [key].
-func parseNode(tokenConfig TokenConfiguration, key Key, nodeBytes []byte) (*node, error) {
+func parseNode(key Key, nodeBytes []byte) (*node, error) {
 	n := dbNode{}
-	if err := codec.decodeDBNode(tokenConfig, nodeBytes, &n); err != nil {
+	if err := codec.decodeDBNode(nodeBytes, &n); err != nil {
 		return nil, err
 	}
 	result := &node{
@@ -111,12 +111,11 @@ func (n *node) setValueDigest() {
 // Adds [child] as a child of [n].
 // Assumes [child]'s key is valid as a child of [n].
 // That is, [n.key] is a prefix of [child.key].
-func (n *node) addChild(tc TokenConfiguration, childNode *node) {
-	tokenLength := tc.TokenLength(n.key)
+func (n *node) addChild(childNode *node, tokenSize int) {
 	n.setChildEntry(
-		childNode.key.Token(tc, tokenLength),
+		childNode.key.Token(n.key.length, tokenSize),
 		child{
-			compressedKey: childNode.key.Skip(tc, tokenLength+1),
+			compressedKey: childNode.key.Skip(n.key.length + tokenSize),
 			id:            childNode.id,
 			hasValue:      childNode.hasValue(),
 		},
@@ -130,9 +129,9 @@ func (n *node) setChildEntry(index byte, childEntry child) {
 }
 
 // Removes [child] from [n]'s children.
-func (n *node) removeChild(tc TokenConfiguration, child *node) {
+func (n *node) removeChild(child *node, tokenSize int) {
 	n.onNodeChanged()
-	delete(n.children, child.key.Token(tc, tc.TokenLength(n.key)))
+	delete(n.children, child.key.Token(n.key.length, tokenSize))
 }
 
 // clone Returns a copy of [n].

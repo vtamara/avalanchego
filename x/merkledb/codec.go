@@ -7,12 +7,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/utils/maybe"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 	"io"
 	"math"
+
+	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/maybe"
 )
 
 const (
@@ -33,13 +34,12 @@ var (
 	trueBytes  = []byte{trueByte}
 	falseBytes = []byte{falseByte}
 
-	errTooManyChildren    = errors.New("length of children list is larger than branching factor")
-	errChildIndexTooLarge = errors.New("invalid child index. Must be less than branching factor")
-	errLeadingZeroes      = errors.New("varint has leading zeroes")
-	errInvalidBool        = errors.New("decoded bool is neither true nor false")
-	errNonZeroKeyPadding  = errors.New("key partial byte should be padded with 0s")
-	errExtraSpace         = errors.New("trailing buffer space")
-	errIntOverflow        = errors.New("value overflows int")
+	ErrChildIndexTooLarge = errors.New("invalid child index. Must be less than branching factor")
+	ErrLeadingZeroes      = errors.New("varint has leading zeroes")
+	ErrInvalidBool        = errors.New("decoded bool is neither true nor false")
+	ErrNonZeroKeyPadding  = errors.New("key partial byte should be padded with 0s")
+	ErrExtraSpace         = errors.New("trailing buffer space")
+	ErrIntOverflow        = errors.New("value overflows int")
 )
 
 // encoderDecoder defines the interface needed by merkleDB to marshal
@@ -53,13 +53,15 @@ type encoder interface {
 	dbNodeSize(n *dbNode) int
 	// Assumes [n] is non-nil.
 	encodeDBNode(n *dbNode) []byte
-	// Assumes [hv] is non-nil.
+
+	// Returns the bytes that will be hashed to generate [n]'s ID.
+	// Assumes [n] is non-nil.
 	encodeHashValues(n *node) []byte
 }
 
 type decoder interface {
 	// Assumes [n] is non-nil.
-	decodeDBNode(tc TokenConfiguration, bytes []byte, n *dbNode) error
+	decodeDBNode(bytes []byte, n *dbNode) error
 }
 
 func newCodec() encoderDecoder {
@@ -115,12 +117,11 @@ func uintSize(value uint64) int {
 }
 
 func keySize(p Key) int {
-	return uintSize(uint64(p.bitLength)) + bytesNeeded(p.bitLength)
+	return uintSize(uint64(p.length)) + bytesNeeded(p.length)
 }
 
 func (c *codecImpl) encodeDBNode(n *dbNode) []byte {
-	startSize := c.dbNodeSize(n)
-	buf := bytes.NewBuffer(make([]byte, 0, startSize))
+	buf := bytes.NewBuffer(make([]byte, 0, c.dbNodeSize(n)))
 
 	c.encodeMaybeByteSlice(buf, n.value)
 	c.encodeUint(buf, uint64(len(n.children)))
@@ -161,7 +162,7 @@ func (c *codecImpl) encodeHashValues(n *node) []byte {
 	return buf.Bytes()
 }
 
-func (c *codecImpl) decodeDBNode(tc TokenConfiguration, b []byte, n *dbNode) error {
+func (c *codecImpl) decodeDBNode(b []byte, n *dbNode) error {
 	if minDBNodeLen > len(b) {
 		return io.ErrUnexpectedEOF
 	}
@@ -178,20 +179,19 @@ func (c *codecImpl) decodeDBNode(tc TokenConfiguration, b []byte, n *dbNode) err
 	switch {
 	case err != nil:
 		return err
-	case numChildren > uint64(tc.branchFactor):
-		return errTooManyChildren
 	case numChildren > uint64(src.Len()/minChildLen):
 		return io.ErrUnexpectedEOF
 	}
-	n.children = make(map[byte]child, int(numChildren))
+
+	n.children = make(map[byte]child, numChildren)
 	var previousChild uint64
 	for i := uint64(0); i < numChildren; i++ {
 		index, err := c.decodeUint(src)
 		if err != nil {
 			return err
 		}
-		if index >= uint64(tc.branchFactor) || (i != 0 && index <= previousChild) {
-			return errChildIndexTooLarge
+		if i != 0 && index <= previousChild || index > math.MaxUint8 {
+			return ErrChildIndexTooLarge
 		}
 		previousChild = index
 
@@ -214,7 +214,7 @@ func (c *codecImpl) decodeDBNode(tc TokenConfiguration, b []byte, n *dbNode) err
 		}
 	}
 	if src.Len() != 0 {
-		return errExtraSpace
+		return ErrExtraSpace
 	}
 	return nil
 }
@@ -239,7 +239,7 @@ func (*codecImpl) decodeBool(src *sliceReader) (bool, error) {
 	case boolByte == falseByte:
 		return false, nil
 	default:
-		return false, errInvalidBool
+		return false, ErrInvalidBool
 	}
 }
 
@@ -267,7 +267,7 @@ func (*codecImpl) decodeUint(src *sliceReader) (uint64, error) {
 			return 0, err
 		}
 		if lastByte == 0x00 {
-			return 0, errLeadingZeroes
+			return 0, ErrLeadingZeroes
 		}
 	}
 
@@ -351,8 +351,8 @@ func (*codecImpl) decodeID(src *sliceReader) (ids.ID, error) {
 	return ids.ID(idBytes), nil
 }
 
-func (c *codecImpl) encodeKey(dst io.Writer, key Key) {
-	c.encodeUint(dst, uint64(key.bitLength))
+func (c *codecImpl) encodeKey(dst *bytes.Buffer, key Key) {
+	c.encodeUint(dst, uint64(key.length))
 	_, _ = dst.Write(key.Bytes())
 }
 
@@ -366,11 +366,12 @@ func (c *codecImpl) decodeKey(src *sliceReader) (Key, error) {
 		return Key{}, err
 	}
 	if length > math.MaxInt {
-		return Key{}, errIntOverflow
+		return Key{}, ErrIntOverflow
 	}
-	result := Key{}
-	result.bitLength = int(length)
-	keyBytesLen := bytesNeeded(result.bitLength)
+	result := Key{
+		length: int(length),
+	}
+	keyBytesLen := bytesNeeded(result.length)
 	if keyBytesLen > src.Len() {
 		return Key{}, io.ErrUnexpectedEOF
 	}
@@ -384,10 +385,10 @@ func (c *codecImpl) decodeKey(src *sliceReader) (Key, error) {
 	if result.hasPartialByte() {
 		// Confirm that the padding bits in the partial byte are 0.
 		// We want to only look at the bits to the right of the last token, which is at index length-1.
-		// Generate a mask with (8-bitsToShift) 0s followed by bitsToShift 1s.
-		paddingMask := byte(0xFF >> (8 - result.bitLength%8))
+		// Generate a mask where the left [remainderBitCount] bits are 0.
+		paddingMask := byte(0xFF >> result.remainderBitCount())
 		if buffer[keyBytesLen-1]&paddingMask != 0 {
-			return Key{}, errNonZeroKeyPadding
+			return Key{}, ErrNonZeroKeyPadding
 		}
 	}
 	result.value = string(buffer)

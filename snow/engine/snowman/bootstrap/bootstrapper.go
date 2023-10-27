@@ -251,7 +251,7 @@ func (b *bootstrapper) Connected(ctx context.Context, nodeID ids.NodeID, nodeVer
 		return err
 	}
 	// Ensure fetchFrom reflects proper validator list
-	if b.Beacons.Contains(nodeID) {
+	if _, ok := b.Beacons.GetValidator(b.Ctx.SubnetID, nodeID); ok {
 		b.fetchFrom.Add(nodeID)
 	}
 
@@ -295,6 +295,10 @@ func (*bootstrapper) Gossip(context.Context) error {
 
 func (b *bootstrapper) Shutdown(ctx context.Context) error {
 	b.Ctx.Log.Info("shutting down bootstrapper")
+
+	b.Ctx.Lock.Lock()
+	defer b.Ctx.Lock.Unlock()
+
 	return b.VM.Shutdown(ctx)
 }
 
@@ -311,6 +315,9 @@ func (b *bootstrapper) Notify(_ context.Context, msg common.Message) error {
 }
 
 func (b *bootstrapper) HealthCheck(ctx context.Context) (interface{}, error) {
+	b.Ctx.Lock.Lock()
+	defer b.Ctx.Lock.Unlock()
+
 	vmIntf, vmErr := b.VM.HealthCheck(ctx)
 	intf := map[string]interface{}{
 		"consensus": struct{}{},
@@ -329,7 +336,7 @@ func (b *bootstrapper) ForceAccepted(ctx context.Context, acceptedContainerIDs [
 	// Initialize the fetch from set to the currently preferred peers
 	b.fetchFrom = b.StartupTracker.PreferredPeers()
 
-	// Append the list of accepted container IDs to pendingContainerIDs to ensure
+	// Extend the list of accepted container IDs to pendingContainerIDs to ensure
 	// we iterate over every container that must be traversed.
 	pendingContainerIDs = append(pendingContainerIDs, acceptedContainerIDs...)
 	toProcess := make([]snowman.Block, 0, len(pendingContainerIDs))
@@ -405,7 +412,10 @@ func (b *bootstrapper) markUnavailable(nodeID ids.NodeID) {
 	}
 }
 
-func (b *bootstrapper) Clear() error {
+func (b *bootstrapper) Clear(context.Context) error {
+	b.Ctx.Lock.Lock()
+	defer b.Ctx.Lock.Unlock()
+
 	if err := b.Config.Blocked.Clear(); err != nil {
 		return err
 	}
