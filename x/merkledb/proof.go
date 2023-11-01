@@ -822,13 +822,10 @@ func addPathInfo(
 
 		// load the node associated with the key or create a new one
 		// pass nothing because we are going to overwrite the value digest below
-		n, err := t.insert(key, maybe.Nothing[[]byte]())
+		children, err := t.insert(key)
 		if err != nil {
 			return err
 		}
-		// We overwrite the valueDigest to be the hash provided in the proof
-		// node because we may not know the pre-image of the valueDigest.
-		n.valueDigest = proofNode.ValueOrHash
 
 		if !shouldInsertLeftChildren && !shouldInsertRightChildren {
 			// No children of proof nodes are outside the range.
@@ -838,9 +835,9 @@ func addPathInfo(
 
 		// Add [proofNode]'s children which are outside the range
 		// [insertChildrenLessThan, insertChildrenGreaterThan].
-		compressedPath := Key{}
+		compressedPath := emptyKey
 		for index, childID := range proofNode.Children {
-			if existingChild, ok := n.children[index]; ok {
+			if existingChild, ok := children[index]; ok {
 				compressedPath = existingChild.compressedKey
 			}
 			childPath := key.Extend(ToToken(index, t.tokenSize), compressedPath)
@@ -848,13 +845,12 @@ func addPathInfo(
 				(shouldInsertRightChildren && childPath.Greater(insertChildrenGreaterThan.Value())) {
 				// We didn't set the other values on the child entry, but it doesn't matter.
 				// We only need the IDs to be correct so that the calculated hash is correct.
-				n.setChildEntry(
-					index,
-					child{
-						id:            childID,
-						compressedKey: compressedPath,
-					})
-			}
+				children[index] = &child{
+					id:            childID,
+					compressedKey: compressedPath,
+				}
+			}cccccbjkhturrdjvcliegjlhhnbrdujujnelvnbjhfhf
+			cccccbjkhturtuhgev
 		}
 	}
 

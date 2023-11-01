@@ -13,6 +13,7 @@ import (
 )
 
 var (
+	emptyKey               Key
 	ErrInvalidBranchFactor = errors.New("branch factor must match one of the predefined branch factors")
 
 	validTokenSizes = []int{
@@ -236,7 +237,7 @@ func shiftCopy(dst []byte, src string, shift int) {
 // k.length-tokensToSkip tokens of [k].
 func (k Key) Skip(bitsToSkip int) Key {
 	if k.length <= bitsToSkip {
-		return Key{}
+		return emptyKey
 	}
 	result := Key{
 		value:  k.value[bitsToSkip/8:],

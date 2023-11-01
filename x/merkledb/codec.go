@@ -61,16 +61,15 @@ type encoderDecoder interface {
 
 type encoder interface {
 	// Assumes [n] is non-nil.
-	encodeDBNode(n *dbNode) []byte
+	encodeChildren(map[byte]*child) []byte
 
-	// Returns the bytes that will be hashed to generate [n]'s ID.
-	// Assumes [n] is non-nil.
-	encodeHashValues(n *node) []byte
+	// Returns the bytes that will be hashed to generate ID.
+	encodeHashValues(key Key, children map[byte]*child, value maybe.Maybe[[]byte]) []byte
 }
 
 type decoder interface {
 	// Assumes [n] is non-nil.
-	decodeDBNode(bytes []byte, n *dbNode) error
+	decodeChildren(b []byte) (map[byte]*child, error)
 }
 
 func newCodec() encoderDecoder {
@@ -91,22 +90,20 @@ type codecImpl struct {
 	varIntPool sync.Pool
 }
 
-func (c *codecImpl) encodeDBNode(n *dbNode) []byte {
+func (c *codecImpl) encodeChildren(children map[byte]*child) []byte {
 	var (
-		numChildren = len(n.children)
+		numChildren = len(children)
 		// Estimate size of [n] to prevent memory allocations
 		estimatedLen = estimatedValueLen + minVarIntLen + estimatedNodeChildLen*numChildren
 		buf          = bytes.NewBuffer(make([]byte, 0, estimatedLen))
 	)
-
-	c.encodeMaybeByteSlice(buf, n.value)
 	c.encodeUint(buf, uint64(numChildren))
 	// Note we insert children in order of increasing index
 	// for determinism.
-	keys := maps.Keys(n.children)
+	keys := maps.Keys(children)
 	slices.Sort(keys)
 	for _, index := range keys {
-		entry := n.children[index]
+		entry := children[index]
 		c.encodeUint(buf, uint64(index))
 		c.encodeKey(buf, entry.compressedKey)
 		_, _ = buf.Write(entry.id[:])
@@ -115,85 +112,79 @@ func (c *codecImpl) encodeDBNode(n *dbNode) []byte {
 	return buf.Bytes()
 }
 
-func (c *codecImpl) encodeHashValues(n *node) []byte {
+func (c *codecImpl) encodeHashValues(key Key, children map[byte]*child, value maybe.Maybe[[]byte]) []byte {
 	var (
-		numChildren = len(n.children)
+		numChildren = len(children)
 		// Estimate size [hv] to prevent memory allocations
 		estimatedLen = minVarIntLen + numChildren*hashValuesChildLen + estimatedValueLen + estimatedKeyLen
 		buf          = bytes.NewBuffer(make([]byte, 0, estimatedLen))
 	)
 
-	c.encodeUint(buf, uint64(numChildren))
+	c.encodeKey(buf, key)
+	c.encodeMaybeByteSlice(buf, value)
 
 	// ensure that the order of entries is consistent
-	keys := maps.Keys(n.children)
+	keys := maps.Keys(children)
 	slices.Sort(keys)
+
+	c.encodeUint(buf, uint64(numChildren))
 	for _, index := range keys {
-		entry := n.children[index]
+		entry := children[index]
 		c.encodeUint(buf, uint64(index))
 		_, _ = buf.Write(entry.id[:])
 	}
-	c.encodeMaybeByteSlice(buf, n.valueDigest)
-	c.encodeKey(buf, n.key)
 
 	return buf.Bytes()
 }
 
-func (c *codecImpl) decodeDBNode(b []byte, n *dbNode) error {
-	if minDBNodeLen > len(b) {
-		return io.ErrUnexpectedEOF
+func (c *codecImpl) decodeChildren(b []byte) (map[byte]*child, error) {
+	if len(b) < 1 {
+		return nil, io.ErrUnexpectedEOF
 	}
 
 	src := bytes.NewReader(b)
-
-	value, err := c.decodeMaybeByteSlice(src)
-	if err != nil {
-		return err
-	}
-	n.value = value
-
 	numChildren, err := c.decodeUint(src)
 	switch {
 	case err != nil:
-		return err
+		return nil, err
 	case numChildren > uint64(src.Len()/minChildLen):
-		return io.ErrUnexpectedEOF
+		return nil, io.ErrUnexpectedEOF
 	}
 
-	n.children = make(map[byte]child, numChildren)
+	result := make(map[byte]*child, numChildren)
 	var previousChild uint64
 	for i := uint64(0); i < numChildren; i++ {
 		index, err := c.decodeUint(src)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if i != 0 && index <= previousChild || index > math.MaxUint8 {
-			return ErrChildIndexTooLarge
+			return nil, ErrChildIndexTooLarge
 		}
 		previousChild = index
 
 		compressedKey, err := c.decodeKey(src)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		childID, err := c.decodeID(src)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		hasValue, err := c.decodeBool(src)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		n.children[byte(index)] = child{
+		result[byte(index)] = &child{
 			compressedKey: compressedKey,
 			id:            childID,
 			hasValue:      hasValue,
 		}
 	}
 	if src.Len() != 0 {
-		return ErrExtraSpace
+		return nil, ErrExtraSpace
 	}
-	return nil
+	return result, nil
 }
 
 func (*codecImpl) encodeBool(dst *bytes.Buffer, value bool) {
@@ -337,29 +328,29 @@ func (c *codecImpl) encodeKey(dst *bytes.Buffer, key Key) {
 
 func (c *codecImpl) decodeKey(src *bytes.Reader) (Key, error) {
 	if minKeyLen > src.Len() {
-		return Key{}, io.ErrUnexpectedEOF
+		return emptyKey, io.ErrUnexpectedEOF
 	}
 
 	length, err := c.decodeUint(src)
 	if err != nil {
-		return Key{}, err
+		return emptyKey, err
 	}
 	if length > math.MaxInt {
-		return Key{}, ErrIntOverflow
+		return emptyKey, ErrIntOverflow
 	}
 	result := Key{
 		length: int(length),
 	}
 	keyBytesLen := bytesNeeded(result.length)
 	if keyBytesLen > src.Len() {
-		return Key{}, io.ErrUnexpectedEOF
+		return emptyKey, io.ErrUnexpectedEOF
 	}
 	buffer := make([]byte, keyBytesLen)
 	if _, err := io.ReadFull(src, buffer); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
-		return Key{}, err
+		return emptyKey, err
 	}
 	if result.hasPartialByte() {
 		// Confirm that the padding bits in the partial byte are 0.
@@ -367,7 +358,7 @@ func (c *codecImpl) decodeKey(src *bytes.Reader) (Key, error) {
 		// Generate a mask where the left [remainderBitCount] bits are 0.
 		paddingMask := byte(0xFF >> result.remainderBitCount())
 		if buffer[keyBytesLen-1]&paddingMask != 0 {
-			return Key{}, ErrNonZeroKeyPadding
+			return emptyKey, ErrNonZeroKeyPadding
 		}
 	}
 	result.value = string(buffer)

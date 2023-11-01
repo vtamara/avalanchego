@@ -18,38 +18,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/hashing"
 )
 
-func getNodeValue(t ReadOnlyTrie, key string) ([]byte, error) {
-	var view *trieView
-	if asTrieView, ok := t.(*trieView); ok {
-		if err := asTrieView.calculateNodeIDs(context.Background()); err != nil {
-			return nil, err
-		}
-		view = asTrieView
-	}
-	if asDatabases, ok := t.(*merkleDB); ok {
-		dbView, err := asDatabases.NewView(context.Background(), ViewChanges{})
-		if err != nil {
-			return nil, err
-		}
-		view = dbView.(*trieView)
-	}
-
-	path := ToKey([]byte(key))
-	var result *node
-	err := view.visitPathToKey(path, func(n *node) error {
-		result = n
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	if result.key != path || result == nil {
-		return nil, database.ErrNotFound
-	}
-
-	return result.value.Value(), nil
-}
-
 func Test_GetValue_Safety(t *testing.T) {
 	require := require.New(t)
 
@@ -118,15 +86,15 @@ func TestTrieViewVisitPathToKey(t *testing.T) {
 	require.IsType(&trieView{}, trieIntf)
 	trie := trieIntf.(*trieView)
 
-	var nodePath []*node
-	require.NoError(trie.visitPathToKey(ToKey(nil), func(n *node) error {
-		nodePath = append(nodePath, n)
+	var keysPath []Key
+	require.NoError(trie.visitPathToKey(ToKey(nil), func(key Key, _ nodeChildren) error {
+		keysPath = append(keysPath, key)
 		return nil
 	}))
 
 	// Just the root
-	require.Len(nodePath, 1)
-	require.Equal(trie.root, nodePath[0])
+	require.Len(keysPath, 1)
+	require.Equal(emptyKey, keysPath[0])
 
 	// Insert a key
 	key1 := []byte{0}
@@ -143,16 +111,16 @@ func TestTrieViewVisitPathToKey(t *testing.T) {
 	trie = trieIntf.(*trieView)
 	require.NoError(trie.calculateNodeIDs(context.Background()))
 
-	nodePath = make([]*node, 0, 2)
-	require.NoError(trie.visitPathToKey(ToKey(key1), func(n *node) error {
-		nodePath = append(nodePath, n)
+	keysPath = []Key{}
+	require.NoError(trie.visitPathToKey(ToKey(key1), func(key Key, _ nodeChildren) error {
+		keysPath = append(keysPath, key)
 		return nil
 	}))
 
 	// Root and 1 value
-	require.Len(nodePath, 2)
-	require.Equal(trie.root, nodePath[0])
-	require.Equal(ToKey(key1), nodePath[1].key)
+	require.Len(keysPath, 2)
+	require.Equal(emptyKey, keysPath[0])
+	require.Equal(ToKey(key1), keysPath[1])
 
 	// Insert another key which is a child of the first
 	key2 := []byte{0, 1}
@@ -169,15 +137,15 @@ func TestTrieViewVisitPathToKey(t *testing.T) {
 	trie = trieIntf.(*trieView)
 	require.NoError(trie.calculateNodeIDs(context.Background()))
 
-	nodePath = make([]*node, 0, 3)
-	require.NoError(trie.visitPathToKey(ToKey(key2), func(n *node) error {
-		nodePath = append(nodePath, n)
+	keysPath = []Key{}
+	require.NoError(trie.visitPathToKey(ToKey(key2), func(key Key, _ nodeChildren) error {
+		keysPath = append(keysPath, key)
 		return nil
 	}))
-	require.Len(nodePath, 3)
-	require.Equal(trie.root, nodePath[0])
-	require.Equal(ToKey(key1), nodePath[1].key)
-	require.Equal(ToKey(key2), nodePath[2].key)
+	require.Len(keysPath, 3)
+	require.Equal(emptyKey, keysPath[0])
+	require.Equal(ToKey(key1), keysPath[1])
+	require.Equal(ToKey(key2), keysPath[2])
 
 	// Insert a key which shares no prefix with the others
 	key3 := []byte{255}
@@ -194,52 +162,53 @@ func TestTrieViewVisitPathToKey(t *testing.T) {
 	trie = trieIntf.(*trieView)
 	require.NoError(trie.calculateNodeIDs(context.Background()))
 
-	nodePath = make([]*node, 0, 2)
-	require.NoError(trie.visitPathToKey(ToKey(key3), func(n *node) error {
-		nodePath = append(nodePath, n)
+	keysPath = []Key{}
+	require.NoError(trie.visitPathToKey(ToKey(key3), func(key Key, _ nodeChildren) error {
+		keysPath = append(keysPath, key)
 		return nil
 	}))
 
-	require.Len(nodePath, 2)
-	require.Equal(trie.root, nodePath[0])
-	require.Equal(ToKey(key3), nodePath[1].key)
+	require.Len(keysPath, 2)
+	require.Equal(emptyKey, keysPath[0])
+	require.Equal(ToKey(key3), keysPath[1])
 
 	// Other key path not affected
-	nodePath = make([]*node, 0, 3)
-	require.NoError(trie.visitPathToKey(ToKey(key2), func(n *node) error {
-		nodePath = append(nodePath, n)
+	keysPath = []Key{}
+	require.NoError(trie.visitPathToKey(ToKey(key2), func(key Key, _ nodeChildren) error {
+		keysPath = append(keysPath, key)
 		return nil
 	}))
-	require.Len(nodePath, 3)
-	require.Equal(trie.root, nodePath[0])
-	require.Equal(ToKey(key1), nodePath[1].key)
-	require.Equal(ToKey(key2), nodePath[2].key)
+	require.Len(keysPath, 3)
+	require.Equal(emptyKey, keysPath[0])
+	require.Equal(ToKey(key1), keysPath[1])
+	require.Equal(ToKey(key2), keysPath[2])
 
 	// Gets closest node when key doesn't exist
 	key4 := []byte{0, 1, 2}
-	nodePath = make([]*node, 0, 3)
-	require.NoError(trie.visitPathToKey(ToKey(key4), func(n *node) error {
-		nodePath = append(nodePath, n)
+	keysPath = []Key{}
+	require.NoError(trie.visitPathToKey(ToKey(key4), func(key Key, _ nodeChildren) error {
+		keysPath = append(keysPath, key)
 		return nil
 	}))
 
-	require.Len(nodePath, 3)
-	require.Equal(trie.root, nodePath[0])
-	require.Equal(ToKey(key1), nodePath[1].key)
-	require.Equal(ToKey(key2), nodePath[2].key)
+	require.Len(keysPath, 3)
+	require.Equal(emptyKey, keysPath[0])
+	require.Equal(ToKey(key1), keysPath[1])
+	require.Equal(ToKey(key2), keysPath[2])
 
 	// Gets just root when key doesn't exist and no key shares a prefix
 	key5 := []byte{128}
-	nodePath = make([]*node, 0, 1)
-	require.NoError(trie.visitPathToKey(ToKey(key5), func(n *node) error {
-		nodePath = append(nodePath, n)
+	keysPath = []Key{}
+	require.NoError(trie.visitPathToKey(ToKey(key5), func(key Key, _ nodeChildren) error {
+		keysPath = append(keysPath, key)
 		return nil
 	}))
-	require.Len(nodePath, 1)
-	require.Equal(trie.root, nodePath[0])
+
+	require.Len(keysPath, 1)
+	require.Equal(emptyKey, keysPath[0])
 }
 
-func Test_Trie_ViewOnCommitedView(t *testing.T) {
+func Test_Trie_ViewOnCommittedView(t *testing.T) {
 	require := require.New(t)
 
 	dbTrie, err := getBasicDB()
@@ -304,23 +273,16 @@ func Test_Trie_WriteToDB(t *testing.T) {
 	require.NoError(err)
 	trie2 := trieIntf2.(*trieView)
 
-	value, err = getNodeValue(trie2, "key")
-	require.NoError(err)
-	require.Equal([]byte("value"), value)
-
 	require.NoError(trie1.CommitToDB(context.Background()))
 	require.NoError(trie2.CommitToDB(context.Background()))
 
 	key := []byte("key")
 	prefixedKey := make([]byte, len(key)+valueNodePrefixLen)
-	copy(prefixedKey, valueNodePrefix)
+	copy(prefixedKey, valuePrefix)
 	copy(prefixedKey[valueNodePrefixLen:], key)
 	rawBytes, err := dbTrie.baseDB.Get(prefixedKey)
 	require.NoError(err)
-
-	node, err := parseNode(ToKey(key), rawBytes)
-	require.NoError(err)
-	require.Equal([]byte("value"), node.value.Value())
+	require.Equal([]byte("value"), rawBytes)
 }
 
 func Test_Trie_InsertAndRetrieve(t *testing.T) {
@@ -337,7 +299,7 @@ func Test_Trie_InsertAndRetrieve(t *testing.T) {
 
 	require.NoError(dbTrie.Put([]byte("key"), []byte("value")))
 
-	value, err = getNodeValue(dbTrie, "key")
+	value, err = dbTrie.GetValue(context.Background(), []byte("key"))
 	require.NoError(err)
 	require.Equal([]byte("value"), value)
 }
@@ -358,7 +320,7 @@ func Test_Trie_Overwrite(t *testing.T) {
 		},
 	)
 	require.NoError(err)
-	value, err := getNodeValue(trie, "key")
+	value, err := trie.GetValue(context.Background(), []byte("key"))
 	require.NoError(err)
 	require.Equal([]byte("value1"), value)
 
@@ -371,7 +333,7 @@ func Test_Trie_Overwrite(t *testing.T) {
 		},
 	)
 	require.NoError(err)
-	value, err = getNodeValue(trie, "key")
+	value, err = trie.GetValue(context.Background(), []byte("key"))
 	require.NoError(err)
 	require.Equal([]byte("value2"), value)
 }
@@ -393,7 +355,7 @@ func Test_Trie_Delete(t *testing.T) {
 	)
 	require.NoError(err)
 
-	value, err := getNodeValue(trie, "key")
+	value, err := trie.GetValue(context.Background(), []byte("key"))
 	require.NoError(err)
 	require.Equal([]byte("value0"), value)
 
@@ -407,7 +369,7 @@ func Test_Trie_Delete(t *testing.T) {
 	)
 	require.NoError(err)
 
-	value, err = getNodeValue(trie, "key")
+	value, err = trie.GetValue(context.Background(), []byte("key"))
 	require.ErrorIs(err, database.ErrNotFound)
 	require.Nil(value)
 }
@@ -439,7 +401,7 @@ func Test_Trie_ExpandOnKeyPath(t *testing.T) {
 	require.NoError(err)
 	trie := trieIntf.(*trieView)
 
-	value, err := getNodeValue(trie, "key")
+	value, err := trie.GetValue(context.Background(), []byte("key"))
 	require.NoError(err)
 	require.Equal([]byte("value0"), value)
 
@@ -454,11 +416,11 @@ func Test_Trie_ExpandOnKeyPath(t *testing.T) {
 	require.NoError(err)
 	trie = trieIntf.(*trieView)
 
-	value, err = getNodeValue(trie, "key")
+	value, err = trie.GetValue(context.Background(), []byte("key"))
 	require.NoError(err)
 	require.Equal([]byte("value0"), value)
 
-	value, err = getNodeValue(trie, "key1")
+	value, err = trie.GetValue(context.Background(), []byte("key1"))
 	require.NoError(err)
 	require.Equal([]byte("value1"), value)
 
@@ -473,15 +435,15 @@ func Test_Trie_ExpandOnKeyPath(t *testing.T) {
 	require.NoError(err)
 	trie = trieIntf.(*trieView)
 
-	value, err = getNodeValue(trie, "key")
+	value, err = trie.GetValue(context.Background(), []byte("key"))
 	require.NoError(err)
 	require.Equal([]byte("value0"), value)
 
-	value, err = getNodeValue(trie, "key1")
+	value, err = trie.GetValue(context.Background(), []byte("key1"))
 	require.NoError(err)
 	require.Equal([]byte("value1"), value)
 
-	value, err = getNodeValue(trie, "key12")
+	value, err = trie.GetValue(context.Background(), []byte("key12"))
 	require.NoError(err)
 	require.Equal([]byte("value12"), value)
 }
@@ -503,7 +465,7 @@ func Test_Trie_CompressedPaths(t *testing.T) {
 	require.NoError(err)
 	trie := trieIntf.(*trieView)
 
-	value, err := getNodeValue(trie, "key12")
+	value, err := trie.GetValue(context.Background(), []byte("key12"))
 	require.NoError(err)
 	require.Equal([]byte("value12"), value)
 
@@ -518,11 +480,11 @@ func Test_Trie_CompressedPaths(t *testing.T) {
 	require.NoError(err)
 	trie = trieIntf.(*trieView)
 
-	value, err = getNodeValue(trie, "key12")
+	value, err = trie.GetValue(context.Background(), []byte("key12"))
 	require.NoError(err)
 	require.Equal([]byte("value12"), value)
 
-	value, err = getNodeValue(trie, "key1")
+	value, err = trie.GetValue(context.Background(), []byte("key1"))
 	require.NoError(err)
 	require.Equal([]byte("value1"), value)
 
@@ -537,15 +499,15 @@ func Test_Trie_CompressedPaths(t *testing.T) {
 	require.NoError(err)
 	trie = trieIntf.(*trieView)
 
-	value, err = getNodeValue(trie, "key12")
+	value, err = trie.GetValue(context.Background(), []byte("key12"))
 	require.NoError(err)
 	require.Equal([]byte("value12"), value)
 
-	value, err = getNodeValue(trie, "key1")
+	value, err = trie.GetValue(context.Background(), []byte("key1"))
 	require.NoError(err)
 	require.Equal([]byte("value1"), value)
 
-	value, err = getNodeValue(trie, "key")
+	value, err = trie.GetValue(context.Background(), []byte("key"))
 	require.NoError(err)
 	require.Equal([]byte("value"), value)
 }
@@ -569,11 +531,11 @@ func Test_Trie_SplitBranch(t *testing.T) {
 	)
 	require.NoError(err)
 
-	value, err := getNodeValue(trie, "key12")
+	value, err := trie.GetValue(context.Background(), []byte("key12"))
 	require.NoError(err)
 	require.Equal([]byte("value12"), value)
 
-	value, err = getNodeValue(trie, "key134")
+	value, err = trie.GetValue(context.Background(), []byte("key134"))
 	require.NoError(err)
 	require.Equal([]byte("value134"), value)
 }
@@ -617,7 +579,7 @@ func Test_Trie_HashCountOnBranch(t *testing.T) {
 
 	// Make sure the branch node with the common prefix was created.
 	// Note it's only created on call to GetMerkleRoot, not in NewView.
-	_, err = view2.getEditableNode(ToKey(keyPrefix), false)
+	_, err = view2.getChildren(ToKey(keyPrefix))
 	require.NoError(err)
 
 	// only hashes the new branch node, the new child node, and root
@@ -688,19 +650,19 @@ func Test_Trie_NoExistingResidual(t *testing.T) {
 	require.NoError(err)
 	require.NotNil(trie)
 
-	value, err := getNodeValue(trie, "k")
+	value, err := trie.GetValue(context.Background(), []byte("k"))
 	require.NoError(err)
 	require.Equal([]byte("1"), value)
 
-	value, err = getNodeValue(trie, "ke")
+	value, err = trie.GetValue(context.Background(), []byte("ke"))
 	require.NoError(err)
 	require.Equal([]byte("2"), value)
 
-	value, err = getNodeValue(trie, "key1")
+	value, err = trie.GetValue(context.Background(), []byte("key1"))
 	require.NoError(err)
 	require.Equal([]byte("3"), value)
 
-	value, err = getNodeValue(trie, "key123")
+	value, err = trie.GetValue(context.Background(), []byte("key123"))
 	require.NoError(err)
 	require.Equal([]byte("4"), value)
 }
@@ -726,15 +688,15 @@ func Test_Trie_BatchApply(t *testing.T) {
 	require.NoError(err)
 	require.NotNil(trie)
 
-	value, err := getNodeValue(trie, "key12")
+	value, err := trie.GetValue(context.Background(), []byte("key12"))
 	require.NoError(err)
 	require.Equal([]byte("value12"), value)
 
-	value, err = getNodeValue(trie, "key134")
+	value, err = trie.GetValue(context.Background(), []byte("key134"))
 	require.NoError(err)
 	require.Equal([]byte("value134"), value)
 
-	_, err = getNodeValue(trie, "key1")
+	_, err = trie.GetValue(context.Background(), []byte("key1"))
 	require.ErrorIs(err, database.ErrNotFound)
 }
 
@@ -758,9 +720,9 @@ func Test_Trie_ChainDeletion(t *testing.T) {
 	require.NoError(err)
 
 	require.NoError(newTrie.(*trieView).calculateNodeIDs(context.Background()))
-	root, err := newTrie.getEditableNode(Key{}, false)
+	root, err := newTrie.getChildren(emptyKey)
 	require.NoError(err)
-	require.Len(root.children, 1)
+	require.Len(root, 1)
 
 	newTrie, err = newTrie.NewView(
 		context.Background(),
@@ -775,10 +737,10 @@ func Test_Trie_ChainDeletion(t *testing.T) {
 	)
 	require.NoError(err)
 	require.NoError(newTrie.(*trieView).calculateNodeIDs(context.Background()))
-	root, err = newTrie.getEditableNode(Key{}, false)
+	root, err = newTrie.getChildren(emptyKey)
 	require.NoError(err)
 	// since all values have been deleted, the nodes should have been cleaned up
-	require.Empty(root.children)
+	require.Empty(root)
 }
 
 func Test_Trie_Invalidate_Siblings_On_Commit(t *testing.T) {
@@ -840,17 +802,17 @@ func Test_Trie_NodeCollapse(t *testing.T) {
 	require.NoError(err)
 
 	require.NoError(trie.(*trieView).calculateNodeIDs(context.Background()))
-	root, err := trie.getEditableNode(Key{}, false)
+	root, err := trie.getChildren(emptyKey)
 	require.NoError(err)
-	require.Len(root.children, 1)
+	require.Len(root, 1)
 
-	root, err = trie.getEditableNode(Key{}, false)
+	root, err = trie.getChildren(emptyKey)
 	require.NoError(err)
-	require.Len(root.children, 1)
+	require.Len(root, 1)
 
-	firstNode, err := trie.getEditableNode(getSingleChildKey(root, dbTrie.tokenSize), true)
+	firstNode, err := trie.getChildren(getSingleChildKey(emptyKey, root, dbTrie.tokenSize))
 	require.NoError(err)
-	require.Len(firstNode.children, 1)
+	require.Len(firstNode, 1)
 
 	// delete the middle values
 	trie, err = trie.NewView(
@@ -866,13 +828,13 @@ func Test_Trie_NodeCollapse(t *testing.T) {
 	require.NoError(err)
 	require.NoError(trie.(*trieView).calculateNodeIDs(context.Background()))
 
-	root, err = trie.getEditableNode(Key{}, false)
+	root, err = trie.getChildren(emptyKey)
 	require.NoError(err)
-	require.Len(root.children, 1)
+	require.Len(root, 1)
 
-	firstNode, err = trie.getEditableNode(getSingleChildKey(root, dbTrie.tokenSize), true)
+	firstNode, err = trie.getChildren(getSingleChildKey(emptyKey, root, dbTrie.tokenSize))
 	require.NoError(err)
-	require.Len(firstNode.children, 2)
+	require.Len(firstNode, 2)
 }
 
 func Test_Trie_MultipleStates(t *testing.T) {
@@ -1213,11 +1175,11 @@ func Test_Trie_ConcurrentNewViewAndCommit(t *testing.T) {
 
 // Returns the path of the only child of this node.
 // Assumes this node has exactly one child.
-func getSingleChildKey(n *node, tokenSize int) Key {
-	for index, entry := range n.children {
-		return n.key.Extend(ToToken(index, tokenSize), entry.compressedKey)
+func getSingleChildKey(key Key, children nodeChildren, tokenSize int) Key {
+	for index, entry := range children {
+		return key.Extend(ToToken(index, tokenSize), entry.compressedKey)
 	}
-	return Key{}
+	return emptyKey
 }
 
 func TestTrieCommitToDB(t *testing.T) {
@@ -1267,7 +1229,9 @@ func TestTrieCommitToDB(t *testing.T) {
 				r.NoError(err)
 
 				// Change the parent
-				view.(*trieView).parentTrie = &trieView{}
+				view2, err := db.NewView(context.Background(), ViewChanges{})
+				r.NoError(err)
+				view.(*trieView).parentTrie = view2
 
 				return view
 			},

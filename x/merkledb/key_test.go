@@ -25,7 +25,7 @@ func TestHasPartialByte(t *testing.T) {
 		t.Run(fmt.Sprint(ts), func(t *testing.T) {
 			require := require.New(t)
 
-			key := Key{}
+			key := emptyKey
 			require.False(key.hasPartialByte())
 
 			if ts == 8 {
@@ -132,7 +132,7 @@ func Test_Key_Has_Prefix(t *testing.T) {
 func Test_Key_Skip(t *testing.T) {
 	require := require.New(t)
 
-	empty := Key{}
+	empty := emptyKey
 	require.Equal(ToKey([]byte{0}).Skip(8), empty)
 	for _, ts := range validTokenSizes {
 		if ts == 8 {
@@ -163,7 +163,7 @@ func Test_Key_Skip(t *testing.T) {
 func Test_Key_Take(t *testing.T) {
 	require := require.New(t)
 
-	require.Equal(ToKey([]byte{0}).Take(0), Key{})
+	require.Equal(ToKey([]byte{0}).Take(0), emptyKey)
 
 	for _, ts := range validTokenSizes {
 		if ts == 8 {
