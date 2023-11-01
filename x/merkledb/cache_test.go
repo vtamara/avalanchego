@@ -18,6 +18,7 @@ func TestNewOnEvictCache(t *testing.T) {
 	called := false
 	size := func(int, int) int {
 		return 1
+
 	}
 	onEviction := func(int, int) error {
 		called = true
