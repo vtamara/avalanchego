@@ -896,7 +896,7 @@ func (t *trieView) recordKeyChange(key Key, after *node, hadValue bool, newNode 
 	}
 
 	before, err := t.getParentTrie().getEditableNode(key, hadValue)
-	if err != nil && !errors.Is(err, database.ErrNotFound) {
+	if err != nil && err != database.ErrNotFound {
 		return err
 	}
 	t.changes.nodes[key] = &change[*node]{
