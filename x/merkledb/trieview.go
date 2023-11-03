@@ -279,21 +279,19 @@ func (t *trieView) calculateNodeIDsHelper(n *node) {
 			continue
 		}
 
-		wg.Add(1)
 		calculateChildID := func() {
-			defer wg.Done()
-
 			t.calculateNodeIDsHelper(childNodeChange.after)
-
 			index := childKey.Token(n.key.length, t.tokenSize)
-			entry := n.children[index]
-			entry.id = childNodeChange.after.id
-			entry.hasValue = childNodeChange.after.hasValue()
+			n.children[index].id = childNodeChange.after.id
+			n.children[index].hasValue = childNodeChange.after.hasValue()
 		}
 
 		// Try updating the child and its descendants in a goroutine.
 		if ok := t.db.calculateNodeIDsSema.TryAcquire(1); ok {
+
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				calculateChildID()
 				t.db.calculateNodeIDsSema.Release(1)
 			}()
