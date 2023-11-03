@@ -89,6 +89,7 @@ func (n *node) calculateID(metrics merkleMetrics) {
 	if n.id != ids.Empty {
 		return
 	}
+	
 	metrics.HashCalculated()
 	bytes := codec.encodeHashValues(n)
 	n.id = hashing.ComputeHash256Array(bytes)
