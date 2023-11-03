@@ -838,9 +838,8 @@ func addPathInfo(
 
 		// Add [proofNode]'s children which are outside the range
 		// [insertChildrenLessThan, insertChildrenGreaterThan].
-		compressedPath := Key{}
-		//empty := Key{}
 		for index, childID := range proofNode.Children {
+			compressedPath := Key{}
 			if existingChild, ok := n.children[index]; ok {
 				compressedPath = existingChild.compressedKey
 			}
@@ -852,7 +851,8 @@ func addPathInfo(
 				n.setChildEntry(
 					index,
 					&child{
-						id: childID,
+						id:            childID,
+						compressedKey: compressedPath,
 					})
 			}
 		}
