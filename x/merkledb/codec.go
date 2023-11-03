@@ -160,7 +160,7 @@ func (c *codecImpl) decodeDBNode(b []byte, n *dbNode) error {
 		return io.ErrUnexpectedEOF
 	}
 
-	n.children = make(map[byte]*child, numChildren)
+	n.children = make(nodeChildren, numChildren)
 	var previousChild uint64
 	for i := uint64(0); i < numChildren; i++ {
 		index, err := c.decodeUint(src)

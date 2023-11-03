@@ -14,10 +14,12 @@ import (
 
 const HashLength = 32
 
+type nodeChildren map[byte]*child
+
 // Representation of a node stored in the database.
 type dbNode struct {
 	value    maybe.Maybe[[]byte]
-	children map[byte]*child
+	children nodeChildren
 }
 
 type child struct {
@@ -40,7 +42,7 @@ type node struct {
 func newNode(key Key) *node {
 	return &node{
 		dbNode: dbNode{
-			children: make(map[byte]*child, 2),
+			children: make(nodeChildren, 2),
 		},
 		key: key,
 	}
