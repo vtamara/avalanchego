@@ -86,6 +86,9 @@ func (n *node) onNodeChanged() {
 
 // Returns and caches the ID of this node.
 func (n *node) calculateID(metrics merkleMetrics) {
+	if n.id != ids.Empty {
+		return
+	}
 	metrics.HashCalculated()
 	bytes := codec.encodeHashValues(n)
 	n.id = hashing.ComputeHash256Array(bytes)
