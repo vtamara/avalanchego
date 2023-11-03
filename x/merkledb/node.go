@@ -4,7 +4,6 @@
 package merkledb
 
 import (
-	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -138,16 +137,23 @@ func (n *node) removeChild(child *node, tokenSize int) {
 // if this ever changes, value will need to be copied as well
 // it is safe to clone all fields because they are only written/read while one or both of the db locks are held
 func (n *node) clone() *node {
-	return &node{
+	newN := &node{
 		id:  n.id,
 		key: n.key,
 		dbNode: dbNode{
 			value:    n.value,
-			children: maps.Clone(n.children),
+			children: make(nodeChildren, len(n.children)),
 		},
 		valueDigest: n.valueDigest,
 		nodeBytes:   n.nodeBytes,
 	}
+	for index, childEntry := range n.children {
+		newN.children[index] = &child{
+			compressedKey: childEntry.compressedKey,
+			id:            childEntry.id,
+			hasValue:      childEntry.hasValue}
+	}
+	return newN
 }
 
 // Returns the ProofNode representation of this node.

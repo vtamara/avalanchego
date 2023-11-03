@@ -270,20 +270,18 @@ func (t *trieView) calculateNodeIDsHelper(n *node) {
 	var wg sync.WaitGroup
 
 	n.nodeBytes = nil
-	for childIndex, childEntry := range n.children {
+	for childIndex := range n.children {
+		childEntry := n.children[childIndex]
 		childKey := n.key.Extend(ToToken(childIndex, t.tokenSize), childEntry.compressedKey)
 		childNodeChange, ok := t.changes.nodes[childKey]
 		if !ok {
 			// This child wasn't changed.
 			continue
 		}
-		//newEntry := &child{compressedKey: childEntry.compressedKey}
-		newEntry := childEntry
-		newEntry.hasValue = childNodeChange.after.hasValue()
-		n.children[childIndex] = newEntry
+		childEntry.hasValue = childNodeChange.after.hasValue()
 		calculateChildID := func() {
 			t.calculateNodeIDsHelper(childNodeChange.after)
-			newEntry.id = childNodeChange.after.id
+			childEntry.id = childNodeChange.after.id
 		}
 
 		// Try updating the child and its descendants in a goroutine.
