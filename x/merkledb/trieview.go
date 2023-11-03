@@ -149,7 +149,7 @@ func newTrieView(
 ) (*trieView, error) {
 	root, err := parentTrie.getEditableNode(Key{}, false /* hasValue */)
 	if err != nil {
-		if errors.Is(err, database.ErrNotFound) {
+		if err == database.ErrNotFound {
 			return nil, ErrNoValidRoot
 		}
 		return nil, err
