@@ -266,41 +266,37 @@ func (t *trieView) calculateNodeIDs(ctx context.Context) error {
 // Calculates the ID of all descendants of [n] which need to be recalculated,
 // and then calculates the ID of [n] itself.
 func (t *trieView) calculateNodeIDsHelper(n *node) {
-	var (
-		// We use [wg] to wait until all descendants of [n] have been updated.
-		wg sync.WaitGroup
-	)
+	// We use [wg] to wait until all descendants of [n] have been updated.
+	var wg sync.WaitGroup
 
-	for childIndex, child := range n.children {
-		childKey := n.key.Extend(ToToken(childIndex, t.tokenSize), child.compressedKey)
+	n.nodeBytes = nil
+	for childIndex, childEntry := range n.children {
+		childKey := n.key.Extend(ToToken(childIndex, t.tokenSize), childEntry.compressedKey)
 		childNodeChange, ok := t.changes.nodes[childKey]
 		if !ok {
 			// This child wasn't changed.
 			continue
 		}
-
+		newEntry := &child{compressedKey: childEntry.compressedKey, hasValue: childNodeChange.after.hasValue()}
+		n.setChildEntry(childIndex, newEntry)
 		calculateChildID := func() {
 			t.calculateNodeIDsHelper(childNodeChange.after)
-			index := childKey.Token(n.key.length, t.tokenSize)
-			n.children[index].id = childNodeChange.after.id
-			n.children[index].hasValue = childNodeChange.after.hasValue()
+			newEntry.id = childNodeChange.after.id
 		}
 
 		// Try updating the child and its descendants in a goroutine.
 		if ok := t.db.calculateNodeIDsSema.TryAcquire(1); ok {
-
 			wg.Add(1)
 			go func() {
-				defer wg.Done()
 				calculateChildID()
 				t.db.calculateNodeIDsSema.Release(1)
+				wg.Done()
 			}()
 		} else {
 			// We're at the goroutine limit; do the work in this goroutine.
 			calculateChildID()
 		}
 	}
-
 	// Wait until all descendants of [n] have been updated.
 	wg.Wait()
 
