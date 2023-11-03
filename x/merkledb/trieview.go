@@ -277,8 +277,10 @@ func (t *trieView) calculateNodeIDsHelper(n *node) {
 			// This child wasn't changed.
 			continue
 		}
-		newEntry := &child{compressedKey: childEntry.compressedKey, hasValue: childNodeChange.after.hasValue()}
-		n.setChildEntry(childIndex, newEntry)
+		//newEntry := &child{compressedKey: childEntry.compressedKey}
+		newEntry := childEntry
+		newEntry.hasValue = childNodeChange.after.hasValue()
+		n.children[childIndex] = newEntry
 		calculateChildID := func() {
 			t.calculateNodeIDsHelper(childNodeChange.after)
 			newEntry.id = childNodeChange.after.id

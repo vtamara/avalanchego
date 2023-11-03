@@ -1167,7 +1167,7 @@ func generateRandTest(require *require.Assertions, r *rand.Rand, size uint, perc
 // Deletes [deletePortion] of the key/value pairs after insertion.
 func insertRandomKeyValues(
 	require *require.Assertions,
-	rand *rand.Rand,
+	r *rand.Rand,
 	dbs []database.Database,
 	numKeyValues uint,
 	deletePortion float64,
@@ -1178,18 +1178,18 @@ func insertRandomKeyValues(
 	require.GreaterOrEqual(deletePortion, float64(0))
 	require.LessOrEqual(deletePortion, float64(1))
 	for i := uint(0); i < numKeyValues; i++ {
-		keyLen := rand.Intn(maxKeyLen)
+		keyLen := r.Intn(maxKeyLen)
 		key := make([]byte, keyLen)
-		_, _ = rand.Read(key)
+		_, _ = r.Read(key)
 
-		valueLen := rand.Intn(maxValLen)
+		valueLen := r.Intn(maxValLen)
 		value := make([]byte, valueLen)
-		_, _ = rand.Read(value)
+		_, _ = r.Read(value)
 		for _, db := range dbs {
 			require.NoError(db.Put(key, value))
 		}
 
-		if rand.Float64() < deletePortion {
+		if r.Float64() < deletePortion {
 			for _, db := range dbs {
 				require.NoError(db.Delete(key))
 			}

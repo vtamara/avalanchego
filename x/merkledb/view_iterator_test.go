@@ -165,7 +165,7 @@ func Test_TrieView_Iterator_Random(t *testing.T) {
 	require := require.New(t)
 	now := time.Now().UnixNano()
 	t.Logf("seed: %d", now)
-	rand := rand.New(rand.NewSource(now)) // #nosec G404
+	r := rand.New(rand.NewSource(now)) // #nosec G404
 
 	var (
 		numKeyChanges = 5_000
@@ -175,10 +175,10 @@ func Test_TrieView_Iterator_Random(t *testing.T) {
 
 	keyChanges := []KeyChange{}
 	for i := 0; i < numKeyChanges; i++ {
-		key := make([]byte, rand.Intn(maxKeyLen))
-		_, _ = rand.Read(key)
-		value := make([]byte, rand.Intn(maxValLen))
-		_, _ = rand.Read(value)
+		key := make([]byte, r.Intn(maxKeyLen))
+		_, _ = r.Read(key)
+		value := make([]byte, r.Intn(maxValLen))
+		_, _ = r.Read(value)
 		keyChanges = append(keyChanges, KeyChange{
 			Key:   key,
 			Value: maybe.Some(value),
