@@ -15,7 +15,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 )
 
-const DefaultFDLimit = 32 * 1024
+const DefaultFDLimit = 64 * 1024
 
 // Set attempts to bump the Rlimit which has a soft (Cur) and a hard (Max) value.
 // The soft limit is what is used by the kernel to report EMFILE errors. The hard
