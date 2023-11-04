@@ -275,13 +275,11 @@ func (*codecImpl) decodeUint(src *sliceReader) (uint64, error) {
 }
 
 func (c *codecImpl) encodeUint(dst io.Writer, value uint64) error {
-	i := 0
 	for value >= 0x80 {
 		if _, err := dst.Write([]byte{byte(value | 0x80)}); err != nil {
 			return err
 		}
 		value >>= 7
-		i++
 	}
 	_, err := dst.Write([]byte{byte(value)})
 	return err
