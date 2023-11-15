@@ -227,7 +227,7 @@ func defaultState(
 
 	execCfg, _ := config.GetExecutionConfig([]byte(`{}`))
 	genesisBytes := buildGenesisTest(t, ctx)
-	state, err := state.New(
+	state, err := state.NewMerkleState(
 		db,
 		genesisBytes,
 		prometheus.NewRegistry(),

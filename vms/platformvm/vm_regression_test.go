@@ -647,7 +647,7 @@ func TestRejectedStateRegressionInvalidValidatorTimestamp(t *testing.T) {
 	// Force a reload of the state from the database.
 	vm.Config.Validators = validators.NewManager()
 	execCfg, _ := config.GetExecutionConfig(nil)
-	newState, err := state.New(
+	newState, err := state.NewMerkleState(
 		vm.db,
 		nil,
 		prometheus.NewRegistry(),
@@ -954,7 +954,7 @@ func TestRejectedStateRegressionInvalidValidatorReward(t *testing.T) {
 	// Force a reload of the state from the database.
 	vm.Config.Validators = validators.NewManager()
 	execCfg, _ := config.GetExecutionConfig(nil)
-	newState, err := state.New(
+	newState, err := state.NewMerkleState(
 		vm.db,
 		nil,
 		prometheus.NewRegistry(),
@@ -1442,7 +1442,6 @@ func TestSubnetValidatorBLSKeyDiffAfterExpiry(t *testing.T) {
 	vm.ctx.Lock.Lock()
 	defer func() {
 		require.NoError(vm.Shutdown(context.Background()))
-
 		vm.ctx.Lock.Unlock()
 	}()
 	subnetID := testSubnet1.TxID
