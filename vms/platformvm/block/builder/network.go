@@ -102,17 +102,10 @@ func (n *network) AppGossip(_ context.Context, nodeID ids.NodeID, msgBytes []byt
 		return nil
 	}
 
-	txID := tx.ID()
-
 	// We need to grab the context lock here to avoid racy behavior with
 	// transaction verification + mempool modifications.
 	n.ctx.Lock.Lock()
 	defer n.ctx.Lock.Unlock()
-
-	if reason := n.blkBuilder.GetDropReason(txID); reason != nil {
-		// If the tx is being dropped - just ignore it
-		return nil
-	}
 
 	// add to mempool
 	if err := n.IssueTx(context.TODO(), tx); err != nil {
@@ -130,6 +123,11 @@ func (n *network) IssueTx(ctx context.Context, tx *txs.Tx) error {
 		// If the transaction is already in the mempool - then it looks the same
 		// as if it was successfully added
 		return nil
+	}
+
+	if reason := n.blkBuilder.GetDropReason(txID); reason != nil {
+		// If the tx is being dropped - just ignore it
+		return reason
 	}
 
 	if err := n.blkBuilder.blkManager.VerifyTx(tx); err != nil {
