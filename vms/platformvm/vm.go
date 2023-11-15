@@ -18,6 +18,7 @@ import (
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
@@ -42,6 +43,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs/mempool"
 	"github.com/ava-labs/avalanchego/vms/platformvm/utxo"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+	"github.com/ava-labs/avalanchego/x/sync"
 
 	snowmanblock "github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	blockbuilder "github.com/ava-labs/avalanchego/vms/platformvm/block/builder"
@@ -157,8 +159,9 @@ func (vm *VM) Initialize(
 
 	rewards := reward.NewCalculator(vm.RewardConfig)
 
+	merkleStateDB := prefixdb.New([]byte("state"), vm.db)
 	vm.state, err = state.NewMerkleState(
-		vm.db,
+		merkleStateDB,
 		genesisBytes,
 		registerer,
 		&vm.Config,
@@ -239,7 +242,12 @@ func (vm *VM) Initialize(
 	}
 
 	// TODO pass args
-	vm.syncClient = psync.NewClient(psync.ClientConfig{}, nil)
+	syncMetadataDB := prefixdb.New([]byte("sync"), vm.db)
+	vm.syncClient = psync.NewClient(psync.ClientConfig{
+		ManagerConfig: sync.ManagerConfig{
+			DB: syncMetadataDB,
+		},
+	}, syncMetadataDB)
 	// TODO call RecordSummary on syncServer
 	vm.syncServer = psync.NewServer(maxSummaryHistoryLen)
 
