@@ -264,6 +264,20 @@ func (mr *MockChainMockRecorder) GetDelegateeReward(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDelegateeReward", reflect.TypeOf((*MockChain)(nil).GetDelegateeReward), arg0, arg1)
 }
 
+// GetMerkleRoot mocks base method.
+func (m *MockChain) GetMerkleRoot() ids.ID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMerkleRoot")
+	ret0, _ := ret[0].(ids.ID)
+	return ret0
+}
+
+// GetMerkleRoot indicates an expected call of GetMerkleRoot.
+func (mr *MockChainMockRecorder) GetMerkleRoot() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMerkleRoot", reflect.TypeOf((*MockChain)(nil).GetMerkleRoot))
+}
+
 // GetPendingDelegatorIterator mocks base method.
 func (m *MockChain) GetPendingDelegatorIterator(arg0 ids.ID, arg1 ids.NodeID) (StakerIterator, error) {
 	m.ctrl.T.Helper()

@@ -391,6 +391,10 @@ type merkleState struct {
 	rewardUTXOsDB    database.Database
 }
 
+func (ms *merkleState) GetMerkleRoot() ids.ID {
+	return ms.merkleRootID
+}
+
 // STAKERS section
 func (ms *merkleState) GetCurrentValidator(subnetID ids.ID, nodeID ids.NodeID) (*Staker, error) {
 	return ms.currentStakers.GetValidator(subnetID, nodeID)
@@ -1349,7 +1353,8 @@ func (ms *merkleState) writeMerkleState(currentData, pendingData map[ids.ID]*sta
 	}
 	ms.merkleRootID = rootID
 
-	return ms.logMerkleRoot(len(batchOps) != 0)
+	ms.logMerkleRoot()
+	return nil
 }
 
 func (ms *merkleState) writeMetadata(batchOps *[]database.BatchOp) error {
@@ -1772,21 +1777,12 @@ func (ms *merkleState) updateValidatorSet(
 	return nil
 }
 
-func (ms *merkleState) logMerkleRoot(hasChanges bool) error {
+func (ms *merkleState) logMerkleRoot() {
 	// get current Height
 	blk, err := ms.GetStatelessBlock(ms.GetLastAccepted())
 	if err != nil {
 		// may happen in tests. Let's just skip
-		return nil
-	}
-
-	if !hasChanges {
-		ms.ctx.Log.Info("merkle root",
-			zap.Uint64("height", blk.Height()),
-			zap.Stringer("blkID", blk.ID()),
-			zap.String("merkle root", "no changes to merkle state"),
-		)
-		return nil
+		return
 	}
 
 	ms.ctx.Log.Info("merkle root",
@@ -1794,5 +1790,4 @@ func (ms *merkleState) logMerkleRoot(hasChanges bool) error {
 		zap.Stringer("blkID", blk.ID()),
 		zap.Stringer("merkle root", ms.merkleRootID),
 	)
-	return nil
 }

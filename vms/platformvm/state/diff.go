@@ -32,6 +32,8 @@ type diff struct {
 	parentID      ids.ID
 	stateVersions Versions
 
+	merkleRootID ids.ID
+
 	timestamp time.Time
 
 	// Subnet ID --> supply of native asset of the subnet
@@ -71,9 +73,18 @@ func NewDiff(
 	return &diff{
 		parentID:      parentID,
 		stateVersions: stateVersions,
+		merkleRootID:  parentState.GetMerkleRoot(),
 		timestamp:     parentState.GetTimestamp(),
 		subnetOwners:  make(map[ids.ID]fx.Owner),
 	}, nil
+}
+
+func (d *diff) GetMerkleRoot() ids.ID {
+	return d.merkleRootID
+}
+
+func (d *diff) SetMerkleRoot(rootID ids.ID) {
+	d.merkleRootID = rootID
 }
 
 func (d *diff) GetTimestamp() time.Time {

@@ -100,6 +100,8 @@ type Chain interface {
 	avax.UTXOGetter
 	avax.UTXODeleter
 
+	GetMerkleRoot() ids.ID
+
 	GetTimestamp() time.Time
 	SetTimestamp(tm time.Time)
 
@@ -702,6 +704,11 @@ func newState(
 
 		singletonDB: prefixdb.New(singletonPrefix, baseDB),
 	}, nil
+}
+
+// TODO what should this be?
+func (s *state) GetMerkleRoot() ids.ID {
+	return ids.Empty
 }
 
 func (s *state) GetCurrentValidator(subnetID ids.ID, nodeID ids.NodeID) (*Staker, error) {
