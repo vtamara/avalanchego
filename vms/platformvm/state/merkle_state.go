@@ -322,6 +322,9 @@ type merkleState struct {
 	singletonDB  database.Database
 	baseMerkleDB database.Database
 	merkleDB     merkledb.MerkleDB // Stores merkleized state
+	// Root of the merkle trie.
+	// Must be updated whenever [merkleDB] changes.
+	merkleRootID ids.ID
 
 	// stakers section (missing Delegatee piece)
 	// TODO: Consider moving delegatee to UTXOs section
@@ -1112,8 +1115,8 @@ func (ms *merkleState) CommitBatch() (database.Batch, error) {
 	return ms.baseDB.CommitBatch()
 }
 
-func (*merkleState) Checksum() ids.ID {
-	return ids.Empty
+func (ms *merkleState) Checksum() ids.ID {
+	return ms.merkleRootID
 }
 
 func (ms *merkleState) Close() error {
@@ -1339,6 +1342,13 @@ func (ms *merkleState) writeMerkleState(currentData, pendingData map[ids.ID]*sta
 	if err := view.CommitToDB(context.TODO()); err != nil {
 		return fmt.Errorf("failed committing merkleDB view: %w", err)
 	}
+
+	rootID, err := ms.merkleDB.GetMerkleRoot(context.Background())
+	if err != nil {
+		return err
+	}
+	ms.merkleRootID = rootID
+
 	return ms.logMerkleRoot(len(batchOps) != 0)
 }
 
@@ -1779,19 +1789,10 @@ func (ms *merkleState) logMerkleRoot(hasChanges bool) error {
 		return nil
 	}
 
-	view, err := ms.merkleDB.NewView(context.TODO(), merkledb.ViewChanges{})
-	if err != nil {
-		return fmt.Errorf("failed creating merkleDB view: %w", err)
-	}
-	root, err := view.GetMerkleRoot(context.TODO())
-	if err != nil {
-		return fmt.Errorf("failed pulling merkle root: %w", err)
-	}
-
 	ms.ctx.Log.Info("merkle root",
 		zap.Uint64("height", blk.Height()),
 		zap.Stringer("blkID", blk.ID()),
-		zap.String("merkle root", root.String()),
+		zap.Stringer("merkle root", ms.merkleRootID),
 	)
 	return nil
 }

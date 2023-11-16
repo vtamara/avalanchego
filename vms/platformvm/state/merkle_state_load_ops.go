@@ -4,6 +4,7 @@
 package state
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -165,7 +166,7 @@ func (ms *merkleState) load(hasSynced bool) error {
 }
 
 // Loads the chain time and last accepted block ID from disk
-// and populates them in [ms].
+// and populates them in [ms]. Also sets [ms.merkleRootID]
 func (ms *merkleState) loadMerkleMetadata() error {
 	// load chain time
 	chainTimeBytes, err := ms.merkleDB.Get(merkleChainTimeKey)
@@ -188,6 +189,12 @@ func (ms *merkleState) loadMerkleMetadata() error {
 	copy(lastAcceptedBlkID[:], blkIDBytes)
 	ms.latestCommittedLastAcceptedBlkID = lastAcceptedBlkID
 	ms.SetLastAccepted(lastAcceptedBlkID)
+
+	rootID, err := ms.merkleDB.GetMerkleRoot(context.Background())
+	if err != nil {
+		return err
+	}
+	ms.merkleRootID = rootID
 
 	// We don't need to load supplies. Unlike chain time and last block ID,
 	// which have the persisted* attribute, we signify that a supply hasn't
