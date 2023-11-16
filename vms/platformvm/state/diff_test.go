@@ -81,6 +81,7 @@ func TestDiffCurrentValidator(t *testing.T) {
 	lastAcceptedID := ids.GenerateTestID()
 	state := NewMockState(ctrl)
 	// Called in NewDiff
+	state.EXPECT().GetMerkleRoot().Return(ids.GenerateTestID()).Times(1)
 	state.EXPECT().GetTimestamp().Return(time.Now()).Times(1)
 
 	states := NewMockVersions(ctrl)
@@ -118,6 +119,7 @@ func TestDiffPendingValidator(t *testing.T) {
 	lastAcceptedID := ids.GenerateTestID()
 	state := NewMockState(ctrl)
 	// Called in NewDiff
+	state.EXPECT().GetMerkleRoot().Return(ids.GenerateTestID()).Times(1)
 	state.EXPECT().GetTimestamp().Return(time.Now()).Times(1)
 
 	states := NewMockVersions(ctrl)
@@ -160,6 +162,7 @@ func TestDiffCurrentDelegator(t *testing.T) {
 
 	state := NewMockState(ctrl)
 	// Called in NewDiff
+	state.EXPECT().GetMerkleRoot().Return(ids.GenerateTestID()).Times(1)
 	state.EXPECT().GetTimestamp().Return(time.Now()).Times(1)
 
 	states := NewMockVersions(ctrl)
@@ -209,6 +212,7 @@ func TestDiffPendingDelegator(t *testing.T) {
 
 	state := NewMockState(ctrl)
 	// Called in NewDiff
+	state.EXPECT().GetMerkleRoot().Return(ids.GenerateTestID()).Times(1)
 	state.EXPECT().GetTimestamp().Return(time.Now()).Times(1)
 
 	states := NewMockVersions(ctrl)
@@ -252,6 +256,7 @@ func TestDiffSubnet(t *testing.T) {
 
 	state := NewMockState(ctrl)
 	// Called in NewDiff
+	state.EXPECT().GetMerkleRoot().Return(ids.GenerateTestID()).Times(1)
 	state.EXPECT().GetTimestamp().Return(time.Now()).Times(1)
 
 	states := NewMockVersions(ctrl)
@@ -290,6 +295,7 @@ func TestDiffChain(t *testing.T) {
 
 	state := NewMockState(ctrl)
 	// Called in NewDiff
+	state.EXPECT().GetMerkleRoot().Return(ids.GenerateTestID()).Times(1)
 	state.EXPECT().GetTimestamp().Return(time.Now()).Times(1)
 
 	states := NewMockVersions(ctrl)
@@ -329,6 +335,7 @@ func TestDiffTx(t *testing.T) {
 
 	state := NewMockState(ctrl)
 	// Called in NewDiff
+	state.EXPECT().GetMerkleRoot().Return(ids.GenerateTestID()).Times(1)
 	state.EXPECT().GetTimestamp().Return(time.Now()).Times(1)
 
 	states := NewMockVersions(ctrl)
@@ -379,6 +386,7 @@ func TestDiffRewardUTXO(t *testing.T) {
 
 	state := NewMockState(ctrl)
 	// Called in NewDiff
+	state.EXPECT().GetMerkleRoot().Return(ids.GenerateTestID()).Times(1)
 	state.EXPECT().GetTimestamp().Return(time.Now()).Times(1)
 
 	states := NewMockVersions(ctrl)
@@ -424,6 +432,7 @@ func TestDiffUTXO(t *testing.T) {
 
 	state := NewMockState(ctrl)
 	// Called in NewDiff
+	state.EXPECT().GetMerkleRoot().Return(ids.GenerateTestID()).Times(1)
 	state.EXPECT().GetTimestamp().Return(time.Now()).Times(1)
 
 	states := NewMockVersions(ctrl)
