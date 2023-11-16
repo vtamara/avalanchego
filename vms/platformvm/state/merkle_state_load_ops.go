@@ -23,6 +23,8 @@ import (
 
 // var errNotYetImplemented = errors.New("NOT YET IMPLEMENTED")
 
+// If [ms] isn't initialized, initializes it with [genesis].
+// Then loads [ms] from disk.
 func (ms *merkleState) sync(genesis []byte) error {
 	shouldInit, err := ms.shouldInit()
 	if err != nil {
@@ -55,6 +57,7 @@ func (ms *merkleState) doneInit() error {
 	return ms.singletonDB.Put(initializedKey, nil)
 }
 
+// Creates a genesis from [genesisBytes] and initializes [ms] with it.
 func (ms *merkleState) init(genesisBytes []byte) error {
 	// Create the genesis block and save it as being accepted (We don't do
 	// genesisBlock.Accept() because then it'd look for genesisBlock's
@@ -80,9 +83,9 @@ func (ms *merkleState) init(genesisBytes []byte) error {
 	return ms.Commit()
 }
 
+// Loads the state from [genesisBls] and [genesis] into [ms].
 func (ms *merkleState) syncGenesis(genesisBlk block.Block, genesis *genesis.Genesis) error {
-	genesisBlkID := genesisBlk.ID()
-	ms.SetLastAccepted(genesisBlkID)
+	ms.SetLastAccepted(genesisBlk.ID())
 	ms.SetTimestamp(time.Unix(int64(genesis.Timestamp), 0))
 	ms.SetCurrentSupply(constants.PrimaryNetworkID, genesis.InitialSupply)
 	ms.AddStatelessBlock(genesisBlk)
@@ -161,13 +164,15 @@ func (ms *merkleState) load(hasSynced bool) error {
 	)
 }
 
+// Loads the chain time and last accepted block ID from disk
+// and populates them in [ms].
 func (ms *merkleState) loadMerkleMetadata() error {
-	// load chainTime
+	// load chain time
 	chainTimeBytes, err := ms.merkleDB.Get(merkleChainTimeKey)
 	if err != nil {
 		return err
 	}
-	chainTime := time.Time{}
+	var chainTime time.Time
 	if err := chainTime.UnmarshalBinary(chainTimeBytes); err != nil {
 		return err
 	}
@@ -184,12 +189,13 @@ func (ms *merkleState) loadMerkleMetadata() error {
 	ms.latestCommittedLastAcceptedBlkID = lastAcceptedBlkID
 	ms.SetLastAccepted(lastAcceptedBlkID)
 
-	// wen don't need to load supplies. Unlike chainTime and lastBlkID
-	// which have the persisted* attribute, we signal supplies have not
-	// been modified by having an empty map.
+	// We don't need to load supplies. Unlike chain time and last block ID,
+	// which have the persisted* attribute, we signify that a supply hasn't
+	// been modified by making it nil.
 	return nil
 }
 
+// Loads current stakes from disk and populates them in [ms].
 func (ms *merkleState) loadCurrentStakers() error {
 	// TODO ABENEGIA: Check missing metadata
 	ms.currentStakers = newBaseStakers()
