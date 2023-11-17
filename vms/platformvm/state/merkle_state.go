@@ -6,7 +6,6 @@ package state
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -1331,11 +1330,12 @@ func (ms *merkleState) NewView(currentData, pendingData map[ids.ID]*stakersData)
 		return nil, err
 	}
 
-	if len(batchOps) == 0 {
-		// nothing to commit
-		// return nil
-		return nil, errors.New("TODO how to handle?")
-	}
+	// TODO remove
+	// if len(batchOps) == 0 {
+	// 	// nothing to commit
+	// 	// return nil
+	// 	return nil, errors.New("TODO how to handle?")
+	// }
 
 	return ms.merkleDB.NewView(context.TODO(), merkledb.ViewChanges{
 		BatchOps: batchOps,
