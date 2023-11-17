@@ -14,6 +14,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/fx"
 	"github.com/ava-labs/avalanchego/vms/platformvm/status"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
+	"github.com/ava-labs/avalanchego/x/merkledb"
 )
 
 var (
@@ -31,8 +32,6 @@ type Diff interface {
 type diff struct {
 	parentID      ids.ID
 	stateVersions Versions
-
-	merkleRootID ids.ID
 
 	timestamp time.Time
 
@@ -73,18 +72,13 @@ func NewDiff(
 	return &diff{
 		parentID:      parentID,
 		stateVersions: stateVersions,
-		merkleRootID:  parentState.GetMerkleRoot(),
 		timestamp:     parentState.GetTimestamp(),
 		subnetOwners:  make(map[ids.ID]fx.Owner),
 	}, nil
 }
 
-func (d *diff) GetMerkleRoot() ids.ID {
-	return d.merkleRootID
-}
-
-func (d *diff) SetMerkleRoot(rootID ids.ID) {
-	d.merkleRootID = rootID
+func (*diff) NewView() (merkledb.TrieView, error) {
+	return nil, errors.New("TODO")
 }
 
 func (d *diff) GetTimestamp() time.Time {

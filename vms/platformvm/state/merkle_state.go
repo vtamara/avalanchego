@@ -322,9 +322,10 @@ type merkleState struct {
 	singletonDB  database.Database
 	baseMerkleDB database.Database
 	merkleDB     merkledb.MerkleDB // Stores merkleized state
-	// Root of the merkle trie.
-	// Must be updated whenever [merkleDB] changes.
-	merkleRootID ids.ID
+
+	// TODO rename or remove
+	currentData map[ids.ID]*stakersData
+	pendingData map[ids.ID]*stakersData
 
 	// stakers section (missing Delegatee piece)
 	// TODO: Consider moving delegatee to UTXOs section
@@ -389,10 +390,6 @@ type merkleState struct {
 	addedRewardUTXOs map[ids.ID][]*avax.UTXO            // map of txID -> []*UTXO
 	rewardUTXOsCache cache.Cacher[ids.ID, []*avax.UTXO] // txID -> []*UTXO
 	rewardUTXOsDB    database.Database
-}
-
-func (ms *merkleState) GetMerkleRoot() ids.ID {
-	return ms.merkleRootID
 }
 
 // STAKERS section
@@ -1116,8 +1113,8 @@ func (ms *merkleState) CommitBatch() (database.Batch, error) {
 	return ms.baseDB.CommitBatch()
 }
 
-func (ms *merkleState) Checksum() ids.ID {
-	return ms.merkleRootID
+func (*merkleState) Checksum() ids.ID {
+	return ids.Empty // TODO what should this be
 }
 
 func (ms *merkleState) Close() error {
@@ -1144,8 +1141,11 @@ func (ms *merkleState) write(updateValidators bool, height uint64) error {
 		return err
 	}
 
+	ms.currentData = currentData
+	ms.pendingData = pendingData
+
 	return utils.Err(
-		ms.writeMerkleState(currentData, pendingData),
+		ms.writeMerkleState(),
 		ms.writeBlocks(),
 		ms.writeTxs(),
 		ms.writeLocalUptimes(),
@@ -1314,7 +1314,7 @@ func (ms *merkleState) processPendingStakers() (map[ids.ID]*stakersData, error) 
 	return output, nil
 }
 
-func (ms *merkleState) NewView(currentData, pendingData map[ids.ID]*stakersData) (merkledb.TrieView, error) {
+func (ms *merkleState) NewView() (merkledb.TrieView, error) {
 	batchOps := make([]database.BatchOp, 0)
 	if err := utils.Err(
 		ms.writeMetadata(&batchOps),
@@ -1322,8 +1322,8 @@ func (ms *merkleState) NewView(currentData, pendingData map[ids.ID]*stakersData)
 		ms.writeSubnetOwners(&batchOps),
 		ms.writeElasticSubnets(&batchOps),
 		ms.writeChains(&batchOps),
-		ms.writeCurrentStakers(&batchOps, currentData),
-		ms.writePendingStakers(&batchOps, pendingData),
+		ms.writeCurrentStakers(&batchOps, ms.currentData),
+		ms.writePendingStakers(&batchOps, ms.pendingData),
 		ms.writeDelegateeRewards(&batchOps),
 		ms.writeUTXOs(&batchOps),
 	); err != nil {
@@ -1342,8 +1342,8 @@ func (ms *merkleState) NewView(currentData, pendingData map[ids.ID]*stakersData)
 	})
 }
 
-func (ms *merkleState) writeMerkleState(currentData, pendingData map[ids.ID]*stakersData) error {
-	view, err := ms.NewView(currentData, pendingData)
+func (ms *merkleState) writeMerkleState() error {
+	view, err := ms.NewView()
 	if err != nil {
 		return err
 	}
@@ -1351,12 +1351,6 @@ func (ms *merkleState) writeMerkleState(currentData, pendingData map[ids.ID]*sta
 	if err := view.CommitToDB(context.TODO()); err != nil {
 		return fmt.Errorf("failed committing merkleDB view: %w", err)
 	}
-
-	rootID, err := ms.merkleDB.GetMerkleRoot(context.Background())
-	if err != nil {
-		return err
-	}
-	ms.merkleRootID = rootID
 
 	ms.logMerkleRoot()
 	return nil
@@ -1793,6 +1787,6 @@ func (ms *merkleState) logMerkleRoot() {
 	ms.ctx.Log.Info("merkle root",
 		zap.Uint64("height", blk.Height()),
 		zap.Stringer("blkID", blk.ID()),
-		zap.Stringer("merkle root", ms.merkleRootID),
+		// zap.Stringer("merkle root", ms.merkleRootID), TODO fix
 	)
 }

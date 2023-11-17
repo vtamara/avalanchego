@@ -44,6 +44,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
 	"github.com/ava-labs/avalanchego/vms/platformvm/status"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
+	"github.com/ava-labs/avalanchego/x/merkledb"
 
 	safemath "github.com/ava-labs/avalanchego/utils/math"
 )
@@ -100,7 +101,7 @@ type Chain interface {
 	avax.UTXOGetter
 	avax.UTXODeleter
 
-	GetMerkleRoot() ids.ID
+	NewView() (merkledb.TrieView, error)
 
 	GetTimestamp() time.Time
 	SetTimestamp(tm time.Time)
@@ -706,9 +707,8 @@ func newState(
 	}, nil
 }
 
-// TODO what should this be?
-func (s *state) GetMerkleRoot() ids.ID {
-	return ids.Empty
+func (*state) NewView() (merkledb.TrieView, error) {
+	return nil, errors.New("TODO")
 }
 
 func (s *state) GetCurrentValidator(subnetID ids.ID, nodeID ids.NodeID) (*Staker, error) {
