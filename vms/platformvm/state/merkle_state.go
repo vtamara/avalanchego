@@ -6,6 +6,7 @@ package state
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -1314,9 +1315,9 @@ func (ms *merkleState) processPendingStakers() (map[ids.ID]*stakersData, error) 
 	return output, nil
 }
 
-func (ms *merkleState) writeMerkleState(currentData, pendingData map[ids.ID]*stakersData) error {
+func (ms *merkleState) NewView(currentData, pendingData map[ids.ID]*stakersData) (merkledb.TrieView, error) {
 	batchOps := make([]database.BatchOp, 0)
-	err := utils.Err(
+	if err := utils.Err(
 		ms.writeMetadata(&batchOps),
 		ms.writePermissionedSubnets(&batchOps),
 		ms.writeSubnetOwners(&batchOps),
@@ -1326,20 +1327,27 @@ func (ms *merkleState) writeMerkleState(currentData, pendingData map[ids.ID]*sta
 		ms.writePendingStakers(&batchOps, pendingData),
 		ms.writeDelegateeRewards(&batchOps),
 		ms.writeUTXOs(&batchOps),
-	)
-	if err != nil {
-		return err
+	); err != nil {
+		return nil, err
 	}
 
 	if len(batchOps) == 0 {
 		// nothing to commit
-		return nil
+		// return nil
+		return nil, errors.New("TODO how to handle?")
 	}
 
-	view, err := ms.merkleDB.NewView(context.TODO(), merkledb.ViewChanges{BatchOps: batchOps})
+	return ms.merkleDB.NewView(context.TODO(), merkledb.ViewChanges{
+		BatchOps: batchOps,
+	})
+}
+
+func (ms *merkleState) writeMerkleState(currentData, pendingData map[ids.ID]*stakersData) error {
+	view, err := ms.NewView(currentData, pendingData)
 	if err != nil {
-		return fmt.Errorf("failed creating merkleDB view: %w", err)
+		return err
 	}
+
 	if err := view.CommitToDB(context.TODO()); err != nil {
 		return fmt.Errorf("failed committing merkleDB view: %w", err)
 	}
