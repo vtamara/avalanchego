@@ -250,12 +250,9 @@ func (vm *VM) Initialize(
 	}
 
 	// TODO pass args
-	syncMetadataDB := prefixdb.New([]byte("sync"), vm.db)
 	vm.syncClient = psync.NewClient(psync.ClientConfig{
-		ManagerConfig: sync.ManagerConfig{
-			DB: syncMetadataDB,
-		},
-	}, syncMetadataDB)
+		ManagerConfig: sync.ManagerConfig{},
+	}, nil)
 	// TODO call RecordSummary on syncServer
 	vm.syncServer = psync.NewServer(maxSummaryHistoryLen)
 
