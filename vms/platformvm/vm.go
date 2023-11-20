@@ -166,7 +166,7 @@ func (vm *VM) Initialize(
 		merkleStateDB,
 		genesisBytes,
 		registerer,
-		&vm.Config,
+		vm.Config.Validators,
 		execConfig,
 		vm.ctx,
 		vm.metrics,
