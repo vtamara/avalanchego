@@ -28,8 +28,7 @@ type child struct {
 // node holds additional information on top of the dbNode that makes calculations easier to do
 type node struct {
 	dbNode
-	key         Key
-	valueDigest maybe.Maybe[[]byte]
+	key Key
 }
 
 // Returns a new node with the given [key] and no value.
@@ -52,8 +51,6 @@ func parseNode(key Key, nodeBytes []byte) (*node, error) {
 		dbNode: n,
 		key:    key,
 	}
-
-	result.setValueDigest()
 	return result, nil
 }
 
@@ -77,14 +74,16 @@ func (n *node) calculateID(metrics merkleMetrics) ids.ID {
 // Set [n]'s value to [val].
 func (n *node) setValue(val maybe.Maybe[[]byte]) {
 	n.value = val
-	n.setValueDigest()
 }
 
-func (n *node) setValueDigest() {
-	if n.value.IsNothing() || len(n.value.Value()) < HashLength {
-		n.valueDigest = n.value
+func (n *node) getValueDigest(clone bool) maybe.Maybe[[]byte] {
+	if n.value.IsNothing() || len(n.value.Value()) <= HashLength {
+		if clone {
+			return maybe.Bind(n.value, slices.Clone[[]byte])
+		}
+		return n.value
 	} else {
-		n.valueDigest = maybe.Some(hashing.ComputeHash256(n.value.Value()))
+		return maybe.Some(hashing.ComputeHash256(n.value.Value()))
 	}
 }
 
@@ -122,7 +121,6 @@ func (n *node) clone() *node {
 			value:    n.value,
 			children: make(map[byte]*child, len(n.children)),
 		},
-		valueDigest: n.valueDigest,
 	}
 	for key, existing := range n.children {
 		result.children[key] = &child{
@@ -139,7 +137,7 @@ func (n *node) asProofNode() ProofNode {
 	pn := ProofNode{
 		Key:         n.key,
 		Children:    make(map[byte]ids.ID, len(n.children)),
-		ValueOrHash: maybe.Bind(n.valueDigest, slices.Clone[[]byte]),
+		ValueOrHash: n.getValueDigest(true),
 	}
 	for index, entry := range n.children {
 		pn.Children[index] = entry.id

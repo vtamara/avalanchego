@@ -585,7 +585,7 @@ func (db *merkleDB) getMerkleRoot() ids.ID {
 // When this is true, the root of the trie is the sentinel node
 // When this is false, the root of the trie is the sentinel node's single child
 func isSentinelNodeTheRoot(sentinel *node) bool {
-	return sentinel.valueDigest.HasValue() || len(sentinel.children) != 1
+	return sentinel.value.HasValue() || len(sentinel.children) != 1
 }
 
 func (db *merkleDB) GetProof(ctx context.Context, key []byte) (*Proof, error) {
