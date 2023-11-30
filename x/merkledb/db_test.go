@@ -479,7 +479,7 @@ func Test_MerkleDB_InsertNil(t *testing.T) {
 	require.NoError(err)
 	require.Empty(value)
 
-	value, err = getNodeValue(db, string(key))
+	value, err = db.GetValue(context.Background(), string(key))
 	require.NoError(err)
 	require.Empty(value)
 }
@@ -808,8 +808,8 @@ func TestMerkleDBClear(t *testing.T) {
 	require.Equal(emptyKey, db.sentinelNode.key)
 
 	// Assert caches are empty.
-	require.Zero(db.valueNodeDB.nodeCache.Len())
-	require.Zero(db.intermediateNodeDB.nodeCache.currentSize)
+	require.Zero(db.valueDB.valueCache.Len())
+	require.Zero(db.nodeDB.nodeCache.currentSize)
 
 	// Assert history has only the clearing change.
 	require.Len(db.history.lastChanges, 1)
@@ -1034,7 +1034,7 @@ func runRandDBTest(require *require.Assertions, r *rand.Rand, rt randTest, token
 			want := values[ToKey(step.key)]
 			require.True(bytes.Equal(want, v)) // Use bytes.Equal so nil treated equal to []byte{}
 
-			trieValue, err := getNodeValue(db, string(step.key))
+			trieValue, err := db.GetValue(context.Background(), string(step.key))
 			if err != nil {
 				require.ErrorIs(err, database.ErrNotFound)
 			}

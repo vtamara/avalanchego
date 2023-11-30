@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"sync"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -98,7 +99,8 @@ type trieView struct {
 
 	// The nil key node
 	// It is either the root of the trie or the root of the trie is its single child node
-	sentinelNode *node
+	sentinelNode  *node
+	sentinelValue maybe.Maybe[[]byte]
 
 	tokenSize int
 }
@@ -251,7 +253,10 @@ func (t *trieView) calculateNodeIDs(ctx context.Context) error {
 		}
 
 		_ = t.db.calculateNodeIDsSema.Acquire(context.Background(), 1)
-		t.changes.rootID = t.calculateNodeIDsHelper(t.sentinelNode)
+		t.changes.rootID, err = t.calculateNodeIDsHelper(t.sentinelNode)
+		if err != nil {
+			return
+		}
 		t.db.calculateNodeIDsSema.Release(1)
 
 		// If the sentinel node is not the root, the trie's root is the sentinel node's only child
@@ -272,39 +277,52 @@ func (t *trieView) calculateNodeIDs(ctx context.Context) error {
 
 // Calculates the ID of all descendants of [n] which need to be recalculated,
 // and then calculates the ID of [n] itself.
-func (t *trieView) calculateNodeIDsHelper(n *node) ids.ID {
-	// We use [wg] to wait until all descendants of [n] have been updated.
-	var wg sync.WaitGroup
+func (t *trieView) calculateNodeIDsHelper(n *node) (ids.ID, error) {
+	// We use [eg] to wait until all descendants of [n] have been updated.
+	var (
+		eg errgroup.Group
+	)
 
 	for childIndex := range n.children {
 		childEntry := n.children[childIndex]
 		childKey := n.key.Extend(ToToken(childIndex, t.tokenSize), childEntry.compressedKey)
-		childNodeChange, ok := t.changes.nodes[childKey]
+
+		childNode, ok := t.changes.nodes[childKey]
 		if !ok {
 			// This child wasn't changed.
 			continue
 		}
-		childEntry.hasValue = childNodeChange.after.hasValue()
 
-		// Try updating the child and its descendants in a goroutine.
+		var err error
 		if ok := t.db.calculateNodeIDsSema.TryAcquire(1); ok {
-			wg.Add(1)
-			go func() {
-				childEntry.id = t.calculateNodeIDsHelper(childNodeChange.after)
-				t.db.calculateNodeIDsSema.Release(1)
-				wg.Done()
-			}()
+			eg.Go(func() error {
+				defer t.db.calculateNodeIDsSema.Release(1)
+				childEntry.id, err = t.calculateNodeIDsHelper(childNode.after)
+				return err
+			})
 		} else {
-			// We're at the goroutine limit; do the work in this goroutine.
-			childEntry.id = t.calculateNodeIDsHelper(childNodeChange.after)
+			if childEntry.id, err = t.calculateNodeIDsHelper(childNode.after); err != nil {
+				return ids.Empty, err
+			}
 		}
 	}
 
-	// Wait until all descendants of [n] have been updated.
-	wg.Wait()
-
-	// The IDs [n]'s descendants are up to date so we can calculate [n]'s ID.
-	return n.calculateID(t.db.metrics)
+	// Try updating the child and its descendants in a goroutine.
+	if err := eg.Wait(); err != nil {
+		return ids.Empty, err
+	}
+	value := maybe.Nothing[[]byte]()
+	if n.hasValue {
+		val, err := t.getValue(n.key)
+		if err != nil {
+			if !errors.Is(err, database.ErrNotFound) {
+				return ids.Empty, err
+			}
+		} else {
+			value = maybe.Some(val)
+		}
+	}
+	return n.calculateID(t.db.metrics, value), nil
 }
 
 // GetProof returns a proof that [bytesPath] is in or not in trie [t].
@@ -331,7 +349,11 @@ func (t *trieView) getProof(ctx context.Context, key []byte) (*Proof, error) {
 	var closestNode *node
 	if err := t.visitPathToKey(proof.Key, func(n *node) error {
 		closestNode = n
-		proof.Path = append(proof.Path, n.asProofNode())
+		value, err := t.getValue(n.key)
+		if err != nil {
+			return err
+		}
+		proof.Path = append(proof.Path, n.asProofNode(value))
 		return nil
 	}); err != nil {
 		return nil, err
@@ -567,7 +589,12 @@ func (t *trieView) GetValues(ctx context.Context, keys [][]byte) ([][]byte, []er
 	valueErrors := make([]error, len(keys))
 
 	for i, key := range keys {
-		results[i], valueErrors[i] = t.getValueCopy(ToKey(key))
+		val, err := t.getValueCopy(ToKey(key))
+		results[i] = val.Value()
+		valueErrors[i] = err
+		if val.IsNothing() {
+			valueErrors[i] = database.ErrNotFound
+		}
 	}
 	return results, valueErrors
 }
@@ -578,42 +605,48 @@ func (t *trieView) GetValue(ctx context.Context, key []byte) ([]byte, error) {
 	_, span := t.db.debugTracer.Start(ctx, "MerkleDB.trieview.GetValue")
 	defer span.End()
 
-	return t.getValueCopy(ToKey(key))
-}
-
-// getValueCopy returns a copy of the value for the given [key].
-// Returns database.ErrNotFound if it doesn't exist.
-func (t *trieView) getValueCopy(key Key) ([]byte, error) {
-	val, err := t.getValue(key)
+	val, err := t.getValueCopy(ToKey(key))
 	if err != nil {
 		return nil, err
 	}
-	return slices.Clone(val), nil
+	if val.IsNothing() {
+		return nil, database.ErrNotFound
+	}
+	return val.Value(), nil
 }
 
-func (t *trieView) getValue(key Key) ([]byte, error) {
+// getValueCopy returns a copy of the value for the given [key].
+func (t *trieView) getValueCopy(key Key) (maybe.Maybe[[]byte], error) {
+	val, err := t.getValue(key)
+	if err != nil {
+		return maybe.Nothing[[]byte](), err
+	}
+	return maybe.Bind(val, slices.Clone[[]byte]), nil
+}
+
+func (t *trieView) getValue(key Key) (maybe.Maybe[[]byte], error) {
 	if t.isInvalid() {
-		return nil, ErrInvalid
+		return maybe.Nothing[[]byte](), ErrInvalid
 	}
 
 	if change, ok := t.changes.values[key]; ok {
 		t.db.metrics.ViewValueCacheHit()
 		if change.after.IsNothing() {
-			return nil, database.ErrNotFound
+			return maybe.Nothing[[]byte](), database.ErrNotFound
 		}
-		return change.after.Value(), nil
+		return change.after, nil
 	}
 	t.db.metrics.ViewValueCacheMiss()
 
 	// if we don't have local copy of the key, then grab a copy from the parent trie
 	value, err := t.getParentTrie().getValue(key)
 	if err != nil {
-		return nil, err
+		return maybe.Nothing[[]byte](), err
 	}
 
 	// ensure no ancestor changes occurred during execution
 	if t.isInvalid() {
-		return nil, ErrInvalid
+		return maybe.Nothing[[]byte](), ErrInvalid
 	}
 
 	return value, nil
@@ -956,19 +989,13 @@ func (t *trieView) recordValueChange(key Key, value maybe.Maybe[[]byte]) error {
 	}
 
 	// grab the before value
-	var beforeMaybe maybe.Maybe[[]byte]
 	before, err := t.getParentTrie().getValue(key)
-	switch err {
-	case nil:
-		beforeMaybe = maybe.Some(before)
-	case database.ErrNotFound:
-		beforeMaybe = maybe.Nothing[[]byte]()
-	default:
+	if err != nil {
 		return err
 	}
 
 	t.changes.values[key] = &change[maybe.Maybe[[]byte]]{
-		before: beforeMaybe,
+		before: before,
 		after:  value,
 	}
 	return nil

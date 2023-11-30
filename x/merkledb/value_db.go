@@ -4,6 +4,8 @@
 package merkledb
 
 import (
+	"errors"
+	"github.com/ava-labs/avalanchego/utils/maybe"
 	"sync"
 
 	"github.com/ava-labs/avalanchego/cache"
@@ -14,7 +16,7 @@ import (
 
 var _ database.Iterator = (*iterator)(nil)
 
-type valueNodeDB struct {
+type valueDB struct {
 	// Holds unused []byte
 	bufferPool *sync.Pool
 
@@ -23,9 +25,9 @@ type valueNodeDB struct {
 	baseDB database.Database
 
 	// If a value is nil, the corresponding key isn't in the trie.
-	// Paths in [nodeCache] aren't prefixed with [valueNodePrefix].
-	nodeCache cache.Cacher[Key, *node]
-	metrics   merkleMetrics
+	// Paths in [valueCache] aren't prefixed with [valueNodePrefix].
+	valueCache cache.Cacher[Key, maybe.Maybe[[]byte]]
+	metrics    merkleMetrics
 
 	closed utils.Atomic[bool]
 }
@@ -35,91 +37,95 @@ func newValueNodeDB(
 	bufferPool *sync.Pool,
 	metrics merkleMetrics,
 	cacheSize int,
-) *valueNodeDB {
-	return &valueNodeDB{
+) *valueDB {
+	return &valueDB{
 		metrics:    metrics,
 		baseDB:     db,
 		bufferPool: bufferPool,
-		nodeCache:  cache.NewSizedLRU(cacheSize, cacheEntrySize),
+		valueCache: cache.NewSizedLRU(cacheSize, func(k Key, v maybe.Maybe[[]byte]) int {
+			if v.IsNothing() {
+				return len(k.value)
+			}
+			return len(k.value) + len(v.Value())
+		}),
 	}
 }
 
-func (db *valueNodeDB) newIteratorWithStartAndPrefix(start, prefix []byte) database.Iterator {
+func (db *valueDB) newIteratorWithStartAndPrefix(start, prefix []byte) database.Iterator {
 	prefixedStart := addPrefixToKey(db.bufferPool, valueNodePrefix, start)
 	prefixedPrefix := addPrefixToKey(db.bufferPool, valueNodePrefix, prefix)
 	i := &iterator{
-		db:       db,
-		nodeIter: db.baseDB.NewIteratorWithStartAndPrefix(prefixedStart, prefixedPrefix),
+		db:        db,
+		valueIter: db.baseDB.NewIteratorWithStartAndPrefix(prefixedStart, prefixedPrefix),
 	}
 	db.bufferPool.Put(prefixedStart)
 	db.bufferPool.Put(prefixedPrefix)
 	return i
 }
 
-func (db *valueNodeDB) Close() {
+func (db *valueDB) Close() {
 	db.closed.Set(true)
 }
 
-func (db *valueNodeDB) NewBatch() *valueNodeBatch {
+func (db *valueDB) NewBatch() *valueNodeBatch {
 	return &valueNodeBatch{
 		db:  db,
-		ops: make(map[Key]*node, defaultBufferLength),
+		ops: make(map[Key]maybe.Maybe[[]byte], defaultBufferLength),
 	}
 }
 
-func (db *valueNodeDB) Get(key Key) (*node, error) {
-	if cachedValue, isCached := db.nodeCache.Get(key); isCached {
-		db.metrics.ValueNodeCacheHit()
-		if cachedValue == nil {
-			return nil, database.ErrNotFound
-		}
+func (db *valueDB) Get(key Key) (maybe.Maybe[[]byte], error) {
+	if cachedValue, isCached := db.valueCache.Get(key); isCached {
+		db.metrics.ValueCacheHit()
 		return cachedValue, nil
 	}
-	db.metrics.ValueNodeCacheMiss()
+	db.metrics.ValueCacheMiss()
 
 	prefixedKey := addPrefixToKey(db.bufferPool, valueNodePrefix, key.Bytes())
 	defer db.bufferPool.Put(prefixedKey)
 
 	db.metrics.DatabaseNodeRead()
-	nodeBytes, err := db.baseDB.Get(prefixedKey)
+	val, err := db.baseDB.Get(prefixedKey)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, database.ErrNotFound) {
+			return maybe.Nothing[[]byte](), nil
+		}
+		return maybe.Nothing[[]byte](), err
 	}
-
-	return parseNode(key, nodeBytes)
+	return maybe.Some(val), nil
 }
 
-func (db *valueNodeDB) Clear() error {
-	db.nodeCache.Flush()
+func (db *valueDB) Clear() error {
+	db.valueCache.Flush()
 	return database.AtomicClearPrefix(db.baseDB, db.baseDB, valueNodePrefix)
 }
 
 // Batch of database operations
 type valueNodeBatch struct {
-	db  *valueNodeDB
-	ops map[Key]*node
+	db  *valueDB
+	ops map[Key]maybe.Maybe[[]byte]
 }
 
-func (b *valueNodeBatch) Put(key Key, value *node) {
+func (b *valueNodeBatch) Put(key Key, value maybe.Maybe[[]byte]) {
 	b.ops[key] = value
 }
 
 func (b *valueNodeBatch) Delete(key Key) {
-	b.ops[key] = nil
+	b.ops[key] = maybe.Nothing[[]byte]()
 }
 
 // Write flushes any accumulated data to the underlying database.
 func (b *valueNodeBatch) Write() error {
 	dbBatch := b.db.baseDB.NewBatch()
-	for key, n := range b.ops {
+	for key, value := range b.ops {
 		b.db.metrics.DatabaseNodeWrite()
-		b.db.nodeCache.Put(key, n)
+		b.db.valueCache.Put(key, value)
 		prefixedKey := addPrefixToKey(b.db.bufferPool, valueNodePrefix, key.Bytes())
-		if n == nil {
+		if value.IsNothing() {
 			if err := dbBatch.Delete(prefixedKey); err != nil {
 				return err
 			}
-		} else if err := dbBatch.Put(prefixedKey, n.bytes()); err != nil {
+		} else if err := dbBatch.Put(prefixedKey, value.Value()); err != nil {
 			return err
 		}
 
@@ -130,10 +136,9 @@ func (b *valueNodeBatch) Write() error {
 }
 
 type iterator struct {
-	db       *valueNodeDB
-	nodeIter database.Iterator
-	current  *node
-	err      error
+	db        *valueDB
+	valueIter database.Iterator
+	err       error
 }
 
 func (i *iterator) Error() error {
@@ -143,45 +148,30 @@ func (i *iterator) Error() error {
 	if i.db.closed.Get() {
 		return database.ErrClosed
 	}
-	return i.nodeIter.Error()
+	return i.valueIter.Error()
 }
 
 func (i *iterator) Key() []byte {
-	if i.current == nil {
-		return nil
+	key := i.valueIter.Key()
+	if len(key) > valueNodePrefixLen {
+		return key[valueNodePrefixLen:]
 	}
-	return i.current.key.Bytes()
+	return key
 }
 
 func (i *iterator) Value() []byte {
-	if i.current == nil {
-		return nil
-	}
-	return i.current.value.Value()
+	return i.valueIter.Value()
 }
 
 func (i *iterator) Next() bool {
-	i.current = nil
 	if i.Error() != nil || i.db.closed.Get() {
-		return false
-	}
-	if !i.nodeIter.Next() {
 		return false
 	}
 
 	i.db.metrics.DatabaseNodeRead()
-	key := i.nodeIter.Key()
-	key = key[valueNodePrefixLen:]
-	n, err := parseNode(ToKey(key), i.nodeIter.Value())
-	if err != nil {
-		i.err = err
-		return false
-	}
-
-	i.current = n
-	return true
+	return i.valueIter.Next()
 }
 
 func (i *iterator) Release() {
-	i.nodeIter.Release()
+	i.valueIter.Release()
 }

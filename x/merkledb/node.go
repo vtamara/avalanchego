@@ -4,25 +4,23 @@
 package merkledb
 
 import (
-	"golang.org/x/exp/slices"
-
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/utils/maybe"
+	"golang.org/x/exp/slices"
 )
 
 const HashLength = 32
 
 // Representation of a node stored in the database.
 type dbNode struct {
-	value    maybe.Maybe[[]byte]
+	hasValue bool
 	children map[byte]*child
 }
 
 type child struct {
 	compressedKey Key
 	id            ids.ID
-	hasValue      bool
 }
 
 // node holds additional information on top of the dbNode that makes calculations easier to do
@@ -54,37 +52,16 @@ func parseNode(key Key, nodeBytes []byte) (*node, error) {
 	return result, nil
 }
 
-// Returns true iff this node has a value.
-func (n *node) hasValue() bool {
-	return !n.value.IsNothing()
-}
-
 // Returns the byte representation of this node.
 func (n *node) bytes() []byte {
 	return codec.encodeDBNode(&n.dbNode)
 }
 
 // Returns and caches the ID of this node.
-func (n *node) calculateID(metrics merkleMetrics) ids.ID {
+func (n *node) calculateID(metrics merkleMetrics, value maybe.Maybe[[]byte]) ids.ID {
 	metrics.HashCalculated()
-	bytes := codec.encodeHashValues(n)
+	bytes := codec.encodeHashValues(n, value)
 	return hashing.ComputeHash256Array(bytes)
-}
-
-// Set [n]'s value to [val].
-func (n *node) setValue(val maybe.Maybe[[]byte]) {
-	n.value = val
-}
-
-func (n *node) getValueDigest(clone bool) maybe.Maybe[[]byte] {
-	if n.value.IsNothing() || len(n.value.Value()) <= HashLength {
-		if clone {
-			return maybe.Bind(n.value, slices.Clone[[]byte])
-		}
-		return n.value
-	} else {
-		return maybe.Some(hashing.ComputeHash256(n.value.Value()))
-	}
 }
 
 // Adds [child] as a child of [n].
@@ -95,7 +72,6 @@ func (n *node) addChild(childNode *node, tokenSize int) {
 		childNode.key.Token(n.key.length, tokenSize),
 		&child{
 			compressedKey: childNode.key.Skip(n.key.length + tokenSize),
-			hasValue:      childNode.hasValue(),
 		},
 	)
 }
@@ -118,7 +94,7 @@ func (n *node) clone() *node {
 	result := &node{
 		key: n.key,
 		dbNode: dbNode{
-			value:    n.value,
+			hasValue: n.hasValue,
 			children: make(map[byte]*child, len(n.children)),
 		},
 	}
@@ -126,18 +102,28 @@ func (n *node) clone() *node {
 		result.children[key] = &child{
 			compressedKey: existing.compressedKey,
 			id:            existing.id,
-			hasValue:      existing.hasValue,
 		}
 	}
 	return result
 }
 
+func getValueOrDigest(value maybe.Maybe[[]byte], clone bool) maybe.Maybe[[]byte] {
+	if value.IsNothing() || len(value.Value()) <= HashLength {
+		if clone {
+			return maybe.Bind(value, slices.Clone[[]byte])
+		}
+		return value
+	} else {
+		return maybe.Some(hashing.ComputeHash256(value.Value()))
+	}
+}
+
 // Returns the ProofNode representation of this node.
-func (n *node) asProofNode() ProofNode {
+func (n *node) asProofNode(value maybe.Maybe[[]byte]) ProofNode {
 	pn := ProofNode{
 		Key:         n.key,
 		Children:    make(map[byte]ids.ID, len(n.children)),
-		ValueOrHash: n.getValueDigest(true),
+		ValueOrHash: getValueOrDigest(value, true),
 	}
 	for index, entry := range n.children {
 		pn.Children[index] = entry.id

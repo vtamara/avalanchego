@@ -35,8 +35,7 @@ type ReadOnlyTrie interface {
 	GetValues(ctx context.Context, keys [][]byte) ([][]byte, []error)
 
 	// get the value associated with the key in path form
-	// database.ErrNotFound if the key is not present
-	getValue(key Key) ([]byte, error)
+	getValue(key Key) (maybe.Maybe[[]byte], error)
 
 	// get an editable copy of the node with the given key path
 	// hasValue indicates which db to look in (value or intermediate)

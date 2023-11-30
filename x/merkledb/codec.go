@@ -63,7 +63,7 @@ type encoder interface {
 
 	// Returns the bytes that will be hashed to generate [n]'s ID.
 	// Assumes [n] is non-nil.
-	encodeHashValues(n *node) []byte
+	encodeHashValues(n *node, value maybe.Maybe[[]byte]) []byte
 }
 
 type decoder interface {
@@ -90,8 +90,8 @@ type codecImpl struct {
 }
 
 func (c *codecImpl) encodedDBNodeSize(n *dbNode) int {
-	// total the number of children pointers + bool indicating if it has a value + the value + the child entries for n.children
-	total := uintSize(uint64(len(n.children))) + boolSize() + len(n.value.Value())
+	// total the number of children pointers + bool indicating if it has a value + the child entries for n.children
+	total := uintSize(uint64(len(n.children))) + boolSize()
 	// for each non-nil entry, we add the additional size of the child entry
 	for index, entry := range n.children {
 		total += childSize(index, entry)
@@ -122,7 +122,7 @@ func keySize(p Key) int {
 
 func (c *codecImpl) encodeDBNode(n *dbNode) []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, c.encodedDBNodeSize(n)))
-	c.encodeMaybeByteSlice(buf, n.value)
+	c.encodeBool(buf, n.hasValue)
 	c.encodeUint(buf, uint64(len(n.children)))
 	// Note we insert children in order of increasing index
 	// for determinism.
@@ -133,12 +133,11 @@ func (c *codecImpl) encodeDBNode(n *dbNode) []byte {
 		c.encodeUint(buf, uint64(index))
 		c.encodeKey(buf, entry.compressedKey)
 		_, _ = buf.Write(entry.id[:])
-		c.encodeBool(buf, entry.hasValue)
 	}
 	return buf.Bytes()
 }
 
-func (c *codecImpl) encodeHashValues(n *node) []byte {
+func (c *codecImpl) encodeHashValues(n *node, value maybe.Maybe[[]byte]) []byte {
 	var (
 		numChildren = len(n.children)
 		// Estimate size [hv] to prevent memory allocations
@@ -156,7 +155,7 @@ func (c *codecImpl) encodeHashValues(n *node) []byte {
 		c.encodeUint(buf, uint64(index))
 		_, _ = buf.Write(entry.id[:])
 	}
-	c.encodeMaybeByteSlice(buf, n.getValueDigest(false))
+	c.encodeMaybeByteSlice(buf, getValueOrDigest(value, false))
 	c.encodeKey(buf, n.key)
 
 	return buf.Bytes()
@@ -168,12 +167,11 @@ func (c *codecImpl) decodeDBNode(b []byte, n *dbNode) error {
 	}
 
 	src := bytes.NewReader(b)
-
-	value, err := c.decodeMaybeByteSlice(src)
+	var err error
+	n.hasValue, err = c.decodeBool(src)
 	if err != nil {
 		return err
 	}
-	n.value = value
 
 	numChildren, err := c.decodeUint(src)
 	switch {
@@ -203,14 +201,9 @@ func (c *codecImpl) decodeDBNode(b []byte, n *dbNode) error {
 		if err != nil {
 			return err
 		}
-		hasValue, err := c.decodeBool(src)
-		if err != nil {
-			return err
-		}
 		n.children[byte(index)] = &child{
 			compressedKey: compressedKey,
 			id:            childID,
-			hasValue:      hasValue,
 		}
 	}
 	if src.Len() != 0 {
