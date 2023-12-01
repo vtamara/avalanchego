@@ -40,23 +40,17 @@ func (l *semaphore) acquire(ctx context.Context) bool {
 // tryAcquire will spinlock until the semaphore can be acquired or there are no more resources to acquire
 // WARNING: this should be ok because we spend most of the time at current == 0, where it will fast fail
 func (l *semaphore) tryAcquire() bool {
-	if l.totalRunning.Load() == l.max {
-		return false
+	for {
+		current := l.totalRunning.Load()
+		if current == l.max {
+			return false
+		}
+		if l.totalRunning.CompareAndSwap(current, current+1) {
+			return true
+		}
 	}
-	if newValue := l.totalRunning.Add(1); newValue >= l.max {
-		l.totalRunning.Add(-1)
-		return false
-	}
-	l.totalRunning.Add(1)
-	if l.totalRunning.Load() > l.max {
-		panic("more running than should be possible")
-	}
-	return true
 }
 
 func (l *semaphore) release() {
 	l.totalRunning.Add(-1)
-	if l.totalRunning.Load() < 0 {
-		panic("released more than possible")
-	}
 }
