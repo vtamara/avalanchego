@@ -13,11 +13,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
-	"golang.org/x/sync/semaphore"
-
-	"go.opentelemetry.io/otel/attribute"
 
 	oteltrace "go.opentelemetry.io/otel/trace"
 
@@ -212,7 +210,7 @@ type merkleDB struct {
 
 	// calculateNodeIDsSema controls the number of goroutines inside
 	// [calculateNodeIDsHelper] at any given time.
-	calculateNodeIDsSema *semaphore.Weighted
+	calculateNodeIDsSema *semaphore
 
 	tokenSize int
 }
@@ -257,7 +255,7 @@ func newDatabase(
 		debugTracer:          getTracerIfEnabled(config.TraceLevel, DebugTrace, config.Tracer),
 		infoTracer:           getTracerIfEnabled(config.TraceLevel, InfoTrace, config.Tracer),
 		childViews:           make([]*trieView, 0, defaultPreallocationSize),
-		calculateNodeIDsSema: semaphore.NewWeighted(int64(rootGenConcurrency)),
+		calculateNodeIDsSema: newSemaphore(int32(rootGenConcurrency)),
 		tokenSize:            BranchFactorToTokenSize[config.BranchFactor],
 	}
 

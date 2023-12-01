@@ -250,9 +250,9 @@ func (t *trieView) calculateNodeIDs(ctx context.Context) error {
 			}
 		}
 
-		_ = t.db.calculateNodeIDsSema.Acquire(context.Background(), 1)
+		_ = t.db.calculateNodeIDsSema.acquire(context.Background())
 		t.changes.rootID = t.calculateNodeIDsHelper(t.sentinelNode)
-		t.db.calculateNodeIDsSema.Release(1)
+		t.db.calculateNodeIDsSema.release()
 
 		// If the sentinel node is not the root, the trie's root is the sentinel node's only child
 		if !isSentinelNodeTheRoot(t.sentinelNode) {
@@ -288,11 +288,11 @@ func (t *trieView) calculateNodeIDsHelper(n *node) ids.ID {
 		childEntry.hasValue = childNodeChange.after.hasValue()
 
 		// Try updating the child and its descendants in a goroutine.
-		if ok := t.db.calculateNodeIDsSema.TryAcquire(1); ok {
+		if ok := t.db.calculateNodeIDsSema.tryAcquire(); ok {
 			wg.Add(1)
 			go func() {
 				childEntry.id = t.calculateNodeIDsHelper(childNodeChange.after)
-				t.db.calculateNodeIDsSema.Release(1)
+				t.db.calculateNodeIDsSema.release()
 				wg.Done()
 			}()
 		} else {
