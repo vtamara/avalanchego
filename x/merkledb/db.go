@@ -44,8 +44,8 @@ const (
 var (
 	_ MerkleDB = (*merkleDB)(nil)
 
-	codec = newCodec()
-
+	codec                  = newCodec()
+	emptyTrieId            = newNode(Key{}).calculateID(&mockMetrics{})
 	metadataPrefix         = []byte{0}
 	valueNodePrefix        = []byte{1}
 	intermediateNodePrefix = []byte{2}
@@ -670,13 +670,14 @@ func (db *merkleDB) GetChangeProof(
 	end maybe.Maybe[[]byte],
 	maxLength int,
 ) (*ChangeProof, error) {
-	if start.HasValue() && end.HasValue() && bytes.Compare(start.Value(), end.Value()) == 1 {
+	switch {
+	case start.HasValue() && end.HasValue() && bytes.Compare(start.Value(), end.Value()) == 1:
 		return nil, ErrStartAfterEnd
-	}
-	if startRootID == endRootID {
+	case startRootID == endRootID:
 		return nil, errSameRoot
+	case endRootID == emptyTrieId:
+		return nil, ErrEmptyProof
 	}
-
 	db.commitLock.RLock()
 	defer db.commitLock.RUnlock()
 
@@ -719,9 +720,6 @@ func (db *merkleDB) GetChangeProof(
 	historicalView, err := db.getHistoricalViewForRange(endRootID, start, largestKey)
 	if err != nil {
 		return nil, err
-	}
-	if isEmpty(historicalView) {
-		return nil, ErrEmptyProof
 	}
 	if largestKey.HasValue() {
 		endProof, err := historicalView.getProof(ctx, largestKey.Value())

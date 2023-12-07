@@ -984,7 +984,7 @@ func runRandDBTest(require *require.Assertions, r *rand.Rand, rt randTest, token
 			}
 
 			rangeProof, err := db.GetRangeProofAtRoot(context.Background(), root, start, end, maxProofLen)
-			if isEmpty(db) {
+			if db.getMerkleRoot() == emptyTrieId {
 				require.ErrorIs(err, ErrEmptyProof)
 				continue
 			}
@@ -1021,7 +1021,7 @@ func runRandDBTest(require *require.Assertions, r *rand.Rand, rt randTest, token
 				require.ErrorIs(err, errSameRoot)
 				continue
 			}
-			if isEmpty(db) {
+			if db.getMerkleRoot() == emptyTrieId {
 				require.ErrorIs(err, ErrEmptyProof)
 				continue
 			}

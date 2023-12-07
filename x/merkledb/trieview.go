@@ -320,7 +320,7 @@ func (t *trieView) getProof(ctx context.Context, key []byte) (*Proof, error) {
 	proof := &Proof{
 		Key: ToKey(key),
 	}
-	if isEmpty(t) {
+	if t.changes.rootID == emptyTrieId {
 		return nil, ErrEmptyProof
 	}
 
@@ -398,7 +398,7 @@ func (t *trieView) GetRangeProof(
 		return nil, fmt.Errorf("%w but was %d", ErrInvalidMaxLength, maxLength)
 	}
 
-	if isEmpty(t) {
+	if t.changes.rootID == emptyTrieId {
 		return nil, ErrEmptyProof
 	}
 
