@@ -86,4 +86,3 @@ To start developing on AvalancheGo, you'll need a few things installed.
 ### Do you want to contribute to the Avalanche documentation?
 
 - Please check out the `avalanche-docs` repository [here](https://github.com/ava-labs/avalanche-docs).
-
