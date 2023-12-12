@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/metric"
 	"github.com/ava-labs/avalanchego/utils/set"
 )
@@ -40,16 +39,22 @@ type CrossChainAppResponseCallback func(
 	err error,
 )
 
+type clientSender interface {
+	AppRequestSender
+	AppGossipSender
+	CrossChainAppRequestSender
+}
+
 type Client struct {
-	handlerID                      uint64
-	handlerPrefix                  []byte
-	router                         *router
-	sender                         common.AppSender
+	handlerID     uint64
+	handlerPrefix []byte
+	router        *router
+	sender        clientSender
 	appRequestFailedTime           metric.Averager
 	appResponseTime                metric.Averager
 	crossChainAppRequestFailedTime metric.Averager
 	crossChainAppResponseTime      metric.Averager
-	options                        *clientOptions
+	options       *clientOptions
 }
 
 // AppRequestAny issues an AppRequest to an arbitrary node decided by Client.
@@ -93,7 +98,7 @@ func (c *Client) AppRequest(
 
 		if err := c.sender.SendAppRequest(
 			ctx,
-			set.Of(nodeID),
+			nodeID,
 			requestID,
 			appRequestBytes,
 		); err != nil {
@@ -125,12 +130,12 @@ func (c *Client) AppGossip(
 // AppGossipSpecific sends a gossip message to a predetermined set of peers.
 func (c *Client) AppGossipSpecific(
 	ctx context.Context,
-	nodeIDs set.Set[ids.NodeID],
+	nodeID ids.NodeID,
 	appGossipBytes []byte,
 ) error {
 	return c.sender.SendAppGossipSpecific(
 		ctx,
-		nodeIDs,
+		nodeID,
 		c.prefixMessage(appGossipBytes),
 	)
 }

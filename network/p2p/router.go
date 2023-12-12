@@ -49,12 +49,17 @@ type meteredHandler struct {
 	crossChainAppRequestTime metric.Averager
 }
 
+type routerSender interface {
+	AppResponseSender
+	CrossChainAppResponseSender
+}
+
 // router routes incoming application messages to the corresponding registered
 // app handler. App messages must be made using the registered handler's
 // corresponding Client.
 type router struct {
 	log       logging.Logger
-	sender    common.AppSender
+	sender    routerSender
 	metrics   prometheus.Registerer
 	namespace string
 
@@ -68,7 +73,7 @@ type router struct {
 // newRouter returns a new instance of Router
 func newRouter(
 	log logging.Logger,
-	sender common.AppSender,
+	sender routerSender,
 	metrics prometheus.Registerer,
 	namespace string,
 ) *router {

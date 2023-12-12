@@ -54,7 +54,7 @@ type clientOptions struct {
 // NewNetwork returns an instance of Network
 func NewNetwork(
 	log logging.Logger,
-	sender common.AppSender,
+	sender AppSender,
 	metrics prometheus.Registerer,
 	namespace string,
 ) *Network {
@@ -74,7 +74,7 @@ type Network struct {
 	Peers *Peers
 
 	log       logging.Logger
-	sender    common.AppSender
+	sender    AppSender
 	metrics   prometheus.Registerer
 	namespace string
 
