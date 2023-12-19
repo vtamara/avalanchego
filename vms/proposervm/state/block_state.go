@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/cache/metercacher"
@@ -15,6 +16,8 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
 	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/proposervm/block"
@@ -29,6 +32,8 @@ var (
 )
 
 type BlockState interface {
+	GetInterestingBlockHeights(logging.Logger) (set.Set[ids.ID], error)
+
 	GetBlock(blkID ids.ID) (block.Block, choices.Status, error)
 	PutBlock(blk block.Block, status choices.Status) error
 	DeleteBlock(blkID ids.ID) error
@@ -80,6 +85,51 @@ func NewMeteredBlockState(db database.Database, namespace string, metrics promet
 		blkCache: blkCache,
 		db:       db,
 	}, err
+}
+
+func (s *blockState) GetInterestingBlockHeights(log logging.Logger) (set.Set[ids.ID], error) {
+	it := s.db.NewIterator()
+	defer it.Release()
+
+	var (
+		seenProposers = set.Of(ids.EmptyNodeID)
+		blkIDs        set.Set[ids.ID]
+	)
+	for it.Next() {
+		blkWrapper := blockWrapper{}
+		parsedVersion, err := c.Unmarshal(it.Value(), &blkWrapper)
+		if err != nil {
+			return nil, err
+		}
+		if parsedVersion != version {
+			return nil, errBlockWrongVersion
+		}
+
+		blkIntf, err := block.Parse(blkWrapper.Block)
+		if err != nil {
+			return nil, err
+		}
+
+		blk, ok := blkIntf.(block.SignedBlock)
+		if !ok {
+			continue
+		}
+
+		nodeID := blk.Proposer()
+		if seenProposers.Contains(nodeID) {
+			continue
+		}
+		seenProposers.Add(nodeID)
+
+		blkID := blk.ID()
+		log.Info("found new proposer",
+			zap.Stringer("nodeID", nodeID),
+			zap.Stringer("blkID", blkID),
+		)
+		blkIDs.Add(blkID)
+	}
+
+	return blkIDs, it.Error()
 }
 
 func (s *blockState) GetBlock(blkID ids.ID) (block.Block, choices.Status, error) {

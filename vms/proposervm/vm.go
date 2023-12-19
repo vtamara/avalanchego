@@ -252,6 +252,14 @@ func (vm *VM) Initialize(
 	default:
 		return err
 	}
+
+	go func() {
+		blkIDs, err := vm.State.GetInterestingBlockHeights(chainCtx.Log)
+		chainCtx.Log.Info("found all unique proposers",
+			zap.Reflect("blkID", blkIDs),
+			zap.Error(err),
+		)
+	}()
 	return nil
 }
 

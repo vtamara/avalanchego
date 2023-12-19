@@ -37,6 +37,7 @@ type SignedBlock interface {
 	PChainHeight() uint64
 	Timestamp() time.Time
 	Proposer() ids.NodeID
+	Cert() *staking.Certificate
 
 	Verify(shouldHaveProposer bool, chainID ids.ID) error
 }
@@ -111,6 +112,10 @@ func (b *statelessBlock) Timestamp() time.Time {
 
 func (b *statelessBlock) Proposer() ids.NodeID {
 	return b.proposer
+}
+
+func (b *statelessBlock) Cert() *staking.Certificate {
+	return b.cert
 }
 
 func (b *statelessBlock) Verify(shouldHaveProposer bool, chainID ids.ID) error {
