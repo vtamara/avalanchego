@@ -457,6 +457,9 @@ func (n *network) AllowConnection(nodeID ids.NodeID) bool {
 }
 
 func (n *network) Track(claimedIPPorts []*ips.ClaimedIPPort) error {
+	n.peerConfig.Log.Verbo("tracking claimed IPs",
+		zap.Int("numIPs", len(claimedIPPorts)),
+	)
 	for _, ip := range claimedIPPorts {
 		if err := n.track(ip); err != nil {
 			return err
@@ -606,6 +609,11 @@ func (n *network) track(ip *ips.ClaimedIPPort) error {
 	// Note: Avoiding signature verification when the IP isn't needed is a
 	// **significant** performance optimization.
 	if !n.ipTracker.ShouldVerifyIP(ip) {
+		n.peerConfig.Log.Verbo("ignoring claimed IP",
+			zap.Stringer("nodeID", ip.NodeID),
+			zap.Stringer("ip", ip.IPPort),
+			zap.Uint64("timestamp", ip.Timestamp),
+		)
 		n.metrics.numUselessPeerListBytes.Add(float64(ip.Size()))
 		return nil
 	}
@@ -824,6 +832,10 @@ func (n *network) disconnectedFromConnected(peer peer.Peer, nodeID ids.NodeID) {
 // there is a randomized exponential backoff to avoid spamming connection
 // attempts.
 func (n *network) dial(nodeID ids.NodeID, ip *trackedIP) {
+	n.peerConfig.Log.Verbo("attempting to dial node",
+		zap.Stringer("nodeID", nodeID),
+		zap.Stringer("ip", ip.ip),
+	)
 	go func() {
 		n.metrics.numTracked.Inc()
 		defer n.metrics.numTracked.Dec()
@@ -896,7 +908,7 @@ func (n *network) dial(nodeID ids.NodeID, ip *trackedIP) {
 				n.peerConfig.Log.Verbo("skipping connection dial",
 					zap.String("reason", "outbound connections to private IPs are prohibited"),
 					zap.Stringer("nodeID", nodeID),
-					zap.Stringer("peerIP", ip.ip.IP),
+					zap.Stringer("peerIP", ip.ip),
 					zap.Duration("delay", ip.delay),
 				)
 				continue
@@ -906,7 +918,8 @@ func (n *network) dial(nodeID ids.NodeID, ip *trackedIP) {
 			if err != nil {
 				n.peerConfig.Log.Verbo(
 					"failed to reach peer, attempting again",
-					zap.Stringer("peerIP", ip.ip.IP),
+					zap.Stringer("nodeID", nodeID),
+					zap.Stringer("peerIP", ip.ip),
 					zap.Duration("delay", ip.delay),
 				)
 				continue
@@ -914,14 +927,16 @@ func (n *network) dial(nodeID ids.NodeID, ip *trackedIP) {
 
 			n.peerConfig.Log.Verbo("starting to upgrade connection",
 				zap.String("direction", "outbound"),
-				zap.Stringer("peerIP", ip.ip.IP),
+				zap.Stringer("nodeID", nodeID),
+				zap.Stringer("peerIP", ip.ip),
 			)
 
 			err = n.upgrade(conn, n.clientUpgrader)
 			if err != nil {
 				n.peerConfig.Log.Verbo(
 					"failed to upgrade, attempting again",
-					zap.Stringer("peerIP", ip.ip.IP),
+					zap.Stringer("nodeID", nodeID),
+					zap.Stringer("peerIP", ip.ip),
 					zap.Duration("delay", ip.delay),
 				)
 				continue
