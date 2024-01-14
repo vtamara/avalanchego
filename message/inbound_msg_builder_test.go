@@ -271,7 +271,6 @@ func TestInboundMsgBuilder(t *testing.T) {
 				container,
 				requestedHeight,
 				nodeID,
-				engineType,
 			)
 			end := time.Now()
 
@@ -285,7 +284,6 @@ func TestInboundMsgBuilder(t *testing.T) {
 			require.Equal(requestID, innerMsg.RequestId)
 			require.Equal(container, innerMsg.Container)
 			require.Equal(requestedHeight, innerMsg.RequestedHeight)
-			require.Equal(engineType, innerMsg.EngineType)
 		},
 	)
 
@@ -302,7 +300,6 @@ func TestInboundMsgBuilder(t *testing.T) {
 				containerIDs[0],
 				requestedHeight,
 				nodeID,
-				engineType,
 			)
 			end := time.Now()
 
@@ -316,7 +313,6 @@ func TestInboundMsgBuilder(t *testing.T) {
 			require.Equal(requestID, innerMsg.RequestId)
 			require.Equal(containerIDs[0][:], innerMsg.ContainerId)
 			require.Equal(requestedHeight, innerMsg.RequestedHeight)
-			require.Equal(engineType, innerMsg.EngineType)
 		},
 	)
 

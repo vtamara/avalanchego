@@ -1156,7 +1156,6 @@ func TestSender_Single_Request(t *testing.T) {
 					requestID,
 					deadline,
 					containerID,
-					engineType,
 				).Return(nil, nil)
 			},
 			setExternalSenderExpect: func(externalSender *MockExternalSender, sentTo set.Set[ids.NodeID]) {

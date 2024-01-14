@@ -321,6 +321,7 @@ message Ancestors {
 //
 // Remote peers should respond with a Put message if they have the container.
 message Get {
+  reserved 5; // Until v1.11.x is activated.
   // Chain being requested from
   bytes chain_id = 1;
   // Unique identifier for this request
@@ -329,26 +330,24 @@ message Get {
   uint64 deadline = 3;
   // Container being requested
   bytes container_id = 4;
-  // Consensus type to handle this message
-  EngineType engine_type = 5;
 }
 
 // Put is sent in response to Get with the requested block.
 message Put {
+  reserved 4; // Until v1.11.x is activated.
   // Chain being responded from
   bytes chain_id = 1;
   // Request id of the original Get request
   uint32 request_id = 2;
   // Requested container
   bytes container = 3;
-  // Consensus type to handle this message
-  EngineType engine_type = 4;
 }
 
 // PushQuery requests the preferences of a remote peer given a container.
 //
 // Remote peers should respond to a PushQuery with a Chits message
 message PushQuery {
+  reserved 5; // Until v1.11.x is activated.
   // Chain being requested from
   bytes chain_id = 1;
   // Unique identifier for this request
@@ -357,8 +356,6 @@ message PushQuery {
   uint64 deadline = 3;
   // Container being gossiped
   bytes container = 4;
-  // Consensus type to handle this message
-  EngineType engine_type = 5;
   // Requesting peer's last accepted height
   uint64 requested_height = 6;
 }
@@ -367,6 +364,7 @@ message PushQuery {
 //
 // Remote peers should respond to a PullQuery with a Chits message
 message PullQuery {
+  reserved 5; // Until v1.11.x is activated.
   // Chain being requested from
   bytes chain_id = 1;
   // Unique identifier for this request
@@ -375,8 +373,6 @@ message PullQuery {
   uint64 deadline = 3;
   // Container id being gossiped
   bytes container_id = 4;
-  // Consensus type to handle this message
-  EngineType engine_type = 5;
   // Requesting peer's last accepted height
   uint64 requested_height = 6;
 }

@@ -798,7 +798,6 @@ func (s *sender) SendGet(ctx context.Context, nodeID ids.NodeID, requestID uint3
 		requestID,
 		deadline,
 		containerID,
-		s.engineType,
 	)
 
 	// Send the message over the network.
@@ -838,7 +837,7 @@ func (s *sender) SendGet(ctx context.Context, nodeID ids.NodeID, requestID uint3
 
 func (s *sender) SendPut(_ context.Context, nodeID ids.NodeID, requestID uint32, container []byte) {
 	// Create the outbound message.
-	outMsg, err := s.msgCreator.Put(s.ctx.ChainID, requestID, container, s.engineType)
+	outMsg, err := s.msgCreator.Put(s.ctx.ChainID, requestID, container)
 	if err != nil {
 		s.ctx.Log.Error("failed to build message",
 			zap.Stringer("messageOp", message.PutOp),
@@ -926,7 +925,6 @@ func (s *sender) SendPushQuery(
 			container,
 			requestedHeight,
 			s.ctx.NodeID,
-			s.engineType,
 		)
 		go s.router.HandleInbound(ctx, inMsg)
 	}
@@ -959,7 +957,6 @@ func (s *sender) SendPushQuery(
 		deadline,
 		container,
 		requestedHeight,
-		s.engineType,
 	)
 
 	// Send the message over the network.
@@ -1065,7 +1062,6 @@ func (s *sender) SendPullQuery(
 			containerID,
 			requestedHeight,
 			s.ctx.NodeID,
-			s.engineType,
 		)
 		go s.router.HandleInbound(ctx, inMsg)
 	}
@@ -1097,7 +1093,6 @@ func (s *sender) SendPullQuery(
 		deadline,
 		containerID,
 		requestedHeight,
-		s.engineType,
 	)
 
 	// Send the message over the network.
@@ -1537,7 +1532,6 @@ func (s *sender) SendGossip(_ context.Context, container []byte) {
 		s.ctx.ChainID,
 		constants.GossipMsgRequestID,
 		container,
-		s.engineType,
 	)
 	if err != nil {
 		s.ctx.Log.Error("failed to build message",
@@ -1586,7 +1580,6 @@ func (s *sender) Accept(ctx *snow.ConsensusContext, _ ids.ID, container []byte) 
 		s.ctx.ChainID,
 		constants.GossipMsgRequestID,
 		container,
-		s.engineType,
 	)
 	if err != nil {
 		s.ctx.Log.Error("failed to build message",

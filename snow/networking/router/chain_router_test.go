@@ -306,8 +306,8 @@ func TestShutdownTimesOut(t *testing.T) {
 	go func() {
 		chainID := ids.ID{}
 		msg := handler.Message{
-			InboundMessage: message.InboundPullQuery(chainID, 1, time.Hour, ids.GenerateTestID(), 0, nodeID, engineType),
-			EngineType:     engineType,
+			InboundMessage: message.InboundPullQuery(chainID, 1, time.Hour, ids.GenerateTestID(), 0, nodeID),
+			EngineType:     p2p.EngineType_ENGINE_TYPE_UNSPECIFIED,
 		}
 		h.Push(context.Background(), msg)
 
@@ -801,8 +801,6 @@ func TestRouterHonorsRequestedEngine(t *testing.T) {
 	}
 
 	{
-		engineType := p2p.EngineType(100)
-
 		requestID++
 		msg := message.InboundPushQuery(
 			ctx.ChainID,
@@ -811,11 +809,10 @@ func TestRouterHonorsRequestedEngine(t *testing.T) {
 			nil,
 			0,
 			nodeID,
-			engineType,
 		)
 
 		h.EXPECT().Push(gomock.Any(), gomock.Any()).Do(func(_ context.Context, msg handler.Message) {
-			require.Equal(engineType, msg.EngineType)
+			require.Equal(p2p.EngineType_ENGINE_TYPE_UNSPECIFIED, msg.EngineType)
 		})
 		chainRouter.HandleInbound(context.Background(), msg)
 	}
@@ -1039,7 +1036,6 @@ func TestValidatorOnlyMessageDrops(t *testing.T) {
 		dummyContainerID,
 		0,
 		nID,
-		p2p.EngineType_ENGINE_TYPE_SNOWMAN,
 	)
 	chainRouter.HandleInbound(context.Background(), inMsg)
 
@@ -1055,7 +1051,6 @@ func TestValidatorOnlyMessageDrops(t *testing.T) {
 		dummyContainerID,
 		0,
 		vID,
-		p2p.EngineType_ENGINE_TYPE_SNOWMAN,
 	)
 	wg.Add(1)
 	chainRouter.HandleInbound(context.Background(), inMsg)
@@ -1307,7 +1302,6 @@ func TestValidatorOnlyAllowedNodeMessageDrops(t *testing.T) {
 		dummyContainerID,
 		0,
 		nID,
-		engineType,
 	)
 	chainRouter.HandleInbound(context.Background(), inMsg)
 
@@ -1323,7 +1317,6 @@ func TestValidatorOnlyAllowedNodeMessageDrops(t *testing.T) {
 		dummyContainerID,
 		0,
 		allowedID,
-		engineType,
 	)
 	wg.Add(1)
 	chainRouter.HandleInbound(context.Background(), inMsg)
@@ -1341,7 +1334,6 @@ func TestValidatorOnlyAllowedNodeMessageDrops(t *testing.T) {
 		dummyContainerID,
 		0,
 		vID,
-		engineType,
 	)
 	wg.Add(1)
 	chainRouter.HandleInbound(context.Background(), inMsg)

@@ -201,7 +201,6 @@ func InboundPushQuery(
 	container []byte,
 	requestedHeight uint64,
 	nodeID ids.NodeID,
-	engineType p2p.EngineType,
 ) InboundMessage {
 	return &inboundMessage{
 		nodeID: nodeID,
@@ -212,7 +211,6 @@ func InboundPushQuery(
 			Deadline:        uint64(deadline),
 			Container:       container,
 			RequestedHeight: requestedHeight,
-			EngineType:      engineType,
 		},
 		expiration: time.Now().Add(deadline),
 	}
@@ -225,7 +223,6 @@ func InboundPullQuery(
 	containerID ids.ID,
 	requestedHeight uint64,
 	nodeID ids.NodeID,
-	engineType p2p.EngineType,
 ) InboundMessage {
 	return &inboundMessage{
 		nodeID: nodeID,
@@ -236,7 +233,6 @@ func InboundPullQuery(
 			Deadline:        uint64(deadline),
 			ContainerId:     containerID[:],
 			RequestedHeight: requestedHeight,
-			EngineType:      engineType,
 		},
 		expiration: time.Now().Add(deadline),
 	}
