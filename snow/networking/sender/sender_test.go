@@ -1139,7 +1139,6 @@ func TestSender_Single_Request(t *testing.T) {
 					nodeID,
 					ctx.ChainID,
 					requestID,
-					engineType,
 				)
 			},
 			assertMsgToMyself: func(require *require.Assertions, msg message.InboundMessage) {
@@ -1147,7 +1146,6 @@ func TestSender_Single_Request(t *testing.T) {
 				innerMsg := msg.Message().(*message.GetFailed)
 				require.Equal(ctx.ChainID, innerMsg.ChainID)
 				require.Equal(requestID, innerMsg.RequestID)
-				require.Equal(engineType, innerMsg.EngineType)
 			},
 			expectedResponseOp: message.PutOp,
 			setMsgCreatorExpect: func(msgCreator *message.MockOutboundMsgBuilder) {

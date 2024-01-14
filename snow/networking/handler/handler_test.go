@@ -290,8 +290,8 @@ func TestHandlerDropsGossipDuringBootstrapping(t *testing.T) {
 	chainID := ids.Empty
 	reqID := uint32(1)
 	inInboundMessage := Message{
-		InboundMessage: message.InternalGetFailed(nodeID, chainID, reqID, p2p.EngineType_ENGINE_TYPE_SNOWMAN),
-		EngineType:     p2p.EngineType_ENGINE_TYPE_SNOWMAN,
+		InboundMessage: message.InternalGetFailed(nodeID, chainID, reqID),
+		EngineType:     p2p.EngineType_ENGINE_TYPE_UNSPECIFIED,
 	}
 	handler.Push(context.Background(), inInboundMessage)
 

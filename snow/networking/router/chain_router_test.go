@@ -603,7 +603,6 @@ func TestRouterTimeout(t *testing.T) {
 				nodeID,
 				ctx.ChainID,
 				requestID,
-				p2p.EngineType_ENGINE_TYPE_SNOWMAN,
 			),
 			p2p.EngineType_ENGINE_TYPE_SNOWMAN,
 		)
@@ -623,7 +622,6 @@ func TestRouterTimeout(t *testing.T) {
 				nodeID,
 				ctx.ChainID,
 				requestID,
-				p2p.EngineType_ENGINE_TYPE_SNOWMAN,
 			),
 			p2p.EngineType_ENGINE_TYPE_SNOWMAN,
 		)
@@ -857,7 +855,7 @@ func TestRouterClearTimeouts(t *testing.T) {
 			name:        "Chits",
 			responseOp:  message.ChitsOp,
 			responseMsg: message.InboundChits(ids.Empty, requestID, ids.GenerateTestID(), ids.GenerateTestID(), ids.GenerateTestID(), ids.EmptyNodeID),
-			timeoutMsg:  message.InternalQueryFailed(ids.EmptyNodeID, ids.Empty, requestID, engineType),
+			timeoutMsg:  message.InternalQueryFailed(ids.EmptyNodeID, ids.Empty, requestID),
 		},
 		{
 			name:        "AppResponse",

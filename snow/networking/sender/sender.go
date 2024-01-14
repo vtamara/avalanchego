@@ -761,7 +761,6 @@ func (s *sender) SendGet(ctx context.Context, nodeID ids.NodeID, requestID uint3
 		nodeID,
 		s.ctx.ChainID,
 		requestID,
-		s.engineType,
 	)
 	s.router.RegisterRequest(
 		ctx,
@@ -896,7 +895,6 @@ func (s *sender) SendPushQuery(
 			nodeID,
 			s.ctx.ChainID,
 			requestID,
-			s.engineType,
 		)
 		s.router.RegisterRequest(
 			ctx,
@@ -944,7 +942,6 @@ func (s *sender) SendPushQuery(
 				nodeID,
 				s.ctx.ChainID,
 				requestID,
-				s.engineType,
 			)
 			go s.router.HandleInbound(ctx, inMsg)
 		}
@@ -1007,7 +1004,6 @@ func (s *sender) SendPushQuery(
 				nodeID,
 				s.ctx.ChainID,
 				requestID,
-				s.engineType,
 			)
 			go s.router.HandleInbound(ctx, inMsg)
 		}
@@ -1033,7 +1029,6 @@ func (s *sender) SendPullQuery(
 			nodeID,
 			s.ctx.ChainID,
 			requestID,
-			s.engineType,
 		)
 		s.router.RegisterRequest(
 			ctx,
@@ -1080,7 +1075,6 @@ func (s *sender) SendPullQuery(
 				nodeID,
 				s.ctx.ChainID,
 				requestID,
-				s.engineType,
 			)
 			go s.router.HandleInbound(ctx, inMsg)
 		}
@@ -1133,7 +1127,6 @@ func (s *sender) SendPullQuery(
 				nodeID,
 				s.ctx.ChainID,
 				requestID,
-				s.engineType,
 			)
 			go s.router.HandleInbound(ctx, inMsg)
 		}
