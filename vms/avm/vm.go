@@ -396,6 +396,10 @@ func (vm *VM) SetPreference(_ context.Context, blkID ids.ID) error {
 	return nil
 }
 
+func (vm *VM) GetPreference(_ context.Context) (ids.ID, error) {
+	return vm.chainManager.Preferred(), nil
+}
+
 func (vm *VM) LastAccepted(context.Context) (ids.ID, error) {
 	return vm.chainManager.LastAccepted(), nil
 }
