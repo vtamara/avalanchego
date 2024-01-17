@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/tests/fixture/tmpnet"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/units"
+	"github.com/ava-labs/avalanchego/vms/example/xsvm"
 	"github.com/ava-labs/avalanchego/vms/example/xsvm/cmd/issue/export"
 	"github.com/ava-labs/avalanchego/vms/example/xsvm/cmd/issue/importtx"
 	"github.com/ava-labs/avalanchego/vms/example/xsvm/cmd/issue/transfer"
@@ -144,7 +145,7 @@ func newXSVMSubnet(name string) *tmpnet.Subnet {
 		Name: name,
 		Chains: []*tmpnet.Chain{
 			{
-				VMName:       "xsvm",
+				VMID:         xsvm.VMID,
 				Genesis:      genesisBytes,
 				PreFundedKey: key,
 			},
