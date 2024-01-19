@@ -24,7 +24,7 @@ var (
 
 // A Factory creates new instances of a VM
 type Factory interface {
-	New(logging.Logger) (interface{}, error)
+	New(logging.Logger) (common.VM, error)
 }
 
 // Manager tracks a collection of VM factories, their aliases, and their

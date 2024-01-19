@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	ids "github.com/ava-labs/avalanchego/ids"
+	common "github.com/ava-labs/avalanchego/snow/engine/common"
 	logging "github.com/ava-labs/avalanchego/utils/logging"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -37,10 +38,10 @@ func (m *MockFactory) EXPECT() *MockFactoryMockRecorder {
 }
 
 // New mocks base method.
-func (m *MockFactory) New(arg0 logging.Logger) (interface{}, error) {
+func (m *MockFactory) New(arg0 logging.Logger) (common.VM, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "New", arg0)
-	ret0, _ := ret[0].(interface{})
+	ret0, _ := ret[0].(common.VM)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

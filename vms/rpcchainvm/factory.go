@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/resource"
 	"github.com/ava-labs/avalanchego/vms"
@@ -31,7 +32,7 @@ func NewFactory(path string, processTracker resource.ProcessTracker, runtimeTrac
 	}
 }
 
-func (f *factory) New(log logging.Logger) (interface{}, error) {
+func (f *factory) New(log logging.Logger) (common.VM, error) {
 	config := &subprocess.Config{
 		Stderr:           log,
 		Stdout:           log,

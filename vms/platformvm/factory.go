@@ -4,6 +4,7 @@
 package platformvm
 
 import (
+	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms"
 	"github.com/ava-labs/avalanchego/vms/platformvm/config"
@@ -17,6 +18,6 @@ type Factory struct {
 }
 
 // New returns a new instance of the Platform Chain
-func (f *Factory) New(logging.Logger) (interface{}, error) {
+func (f *Factory) New(logging.Logger) (common.VM, error) {
 	return &VM{Config: f.Config}, nil
 }
