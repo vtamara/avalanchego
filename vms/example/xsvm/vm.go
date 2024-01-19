@@ -112,10 +112,6 @@ func (*VM) Version(context.Context) (string, error) {
 	return Version.String(), nil
 }
 
-func (*VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, error) {
-	return nil, nil
-}
-
 func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	server := rpc.NewServer()
 	server.RegisterCodec(json.NewCodec(), "application/json")
@@ -175,10 +171,6 @@ func (vm *VM) LastAccepted(context.Context) (ids.ID, error) {
 
 func (vm *VM) BuildBlockWithContext(ctx context.Context, blockContext *smblock.Context) (snowman.Block, error) {
 	return vm.builder.BuildBlock(ctx, blockContext)
-}
-
-func (*VM) VerifyHeightIndex(context.Context) error {
-	return nil
 }
 
 func (vm *VM) GetBlockIDAtHeight(_ context.Context, height uint64) (ids.ID, error) {

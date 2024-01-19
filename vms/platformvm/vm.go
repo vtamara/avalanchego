@@ -35,7 +35,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/version"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
-	"github.com/ava-labs/avalanchego/vms/platformvm/api"
 	"github.com/ava-labs/avalanchego/vms/platformvm/block"
 	"github.com/ava-labs/avalanchego/vms/platformvm/config"
 	"github.com/ava-labs/avalanchego/vms/platformvm/fx"
@@ -303,6 +302,9 @@ func (vm *VM) pruneMempool() error {
 	vm.ctx.Lock.Lock()
 	defer vm.ctx.Lock.Unlock()
 
+	// Packing all of the transactions in order performs additional checks that
+	// the MempoolTxVerifier doesn't include. So, evicting transactions from
+	// here is expected to happen occasionally.
 	blockTxs, err := vm.Builder.PackBlockTxs(math.MaxInt)
 	if err != nil {
 		return err
@@ -512,18 +514,6 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	}, err
 }
 
-// CreateStaticHandlers returns a map where:
-// * keys are API endpoint extensions
-// * values are API handlers
-func (*VM) CreateStaticHandlers(context.Context) (map[string]http.Handler, error) {
-	server := rpc.NewServer()
-	server.RegisterCodec(json.NewCodec(), "application/json")
-	server.RegisterCodec(json.NewCodec(), "application/json;charset=UTF-8")
-	return map[string]http.Handler{
-		"": server,
-	}, server.RegisterService(&api.StaticService{}, "platform")
-}
-
 func (vm *VM) Connected(_ context.Context, nodeID ids.NodeID, _ *version.Application) error {
 	return vm.uptimeManager.Connect(nodeID, constants.PrimaryNetworkID)
 }
@@ -549,14 +539,6 @@ func (vm *VM) Clock() *mockable.Clock {
 
 func (vm *VM) Logger() logging.Logger {
 	return vm.ctx.Log
-}
-
-func (vm *VM) VerifyHeightIndex(_ context.Context) error {
-	if vm.pruned.Get() {
-		return nil
-	}
-
-	return snowmanblock.ErrIndexIncomplete
 }
 
 func (vm *VM) GetBlockIDAtHeight(_ context.Context, height uint64) (ids.ID, error) {

@@ -337,32 +337,6 @@ func (vm *VMServer) CreateHandlers(ctx context.Context, _ *emptypb.Empty) (*vmpb
 	return resp, nil
 }
 
-func (vm *VMServer) CreateStaticHandlers(ctx context.Context, _ *emptypb.Empty) (*vmpb.CreateStaticHandlersResponse, error) {
-	handlers, err := vm.vm.CreateStaticHandlers(ctx)
-	if err != nil {
-		return nil, err
-	}
-	resp := &vmpb.CreateStaticHandlersResponse{}
-	for prefix, handler := range handlers {
-		serverListener, err := grpcutils.NewListener()
-		if err != nil {
-			return nil, err
-		}
-		server := grpcutils.NewServer()
-		vm.serverCloser.Add(server)
-		httppb.RegisterHTTPServer(server, ghttp.NewServer(handler))
-
-		// Start HTTP service
-		go grpcutils.Serve(serverListener, server)
-
-		resp.Handlers = append(resp.Handlers, &vmpb.Handler{
-			Prefix:     prefix,
-			ServerAddr: serverListener.Addr().String(),
-		})
-	}
-	return resp, nil
-}
-
 func (vm *VMServer) Connected(ctx context.Context, req *vmpb.ConnectedRequest) (*emptypb.Empty, error) {
 	nodeID, err := ids.ToNodeID(req.NodeId)
 	if err != nil {
@@ -661,13 +635,6 @@ func (vm *VMServer) BatchedParseBlock(
 	return &vmpb.BatchedParseBlockResponse{
 		Response: blocks,
 	}, nil
-}
-
-func (vm *VMServer) VerifyHeightIndex(ctx context.Context, _ *emptypb.Empty) (*vmpb.VerifyHeightIndexResponse, error) {
-	err := vm.vm.VerifyHeightIndex(ctx)
-	return &vmpb.VerifyHeightIndexResponse{
-		Err: errorToErrEnum[err],
-	}, errorToRPCError(err)
 }
 
 func (vm *VMServer) GetBlockIDAtHeight(
