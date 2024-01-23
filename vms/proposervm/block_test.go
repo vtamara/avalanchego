@@ -159,7 +159,7 @@ func TestPreDurangoValidatorNodeBlockBuiltDelaysTests(t *testing.T) {
 
 	// Make sure preference is duly set
 	require.NoError(proVM.SetPreference(ctx, parentBlk.ID()))
-	require.Equal(proVM.preferred, parentBlk.ID())
+	require.Equal(proVM.State.Preferred(), parentBlk.ID())
 	_, err = proVM.getPostForkBlock(ctx, parentBlk.ID())
 	require.NoError(err)
 
@@ -296,7 +296,7 @@ func TestPreDurangoNonValidatorNodeBlockBuiltDelaysTests(t *testing.T) {
 
 	// Make sure preference is duly set
 	require.NoError(proVM.SetPreference(ctx, parentBlk.ID()))
-	require.Equal(proVM.preferred, parentBlk.ID())
+	require.Equal(proVM.State.Preferred(), parentBlk.ID())
 	_, err = proVM.getPostForkBlock(ctx, parentBlk.ID())
 	require.NoError(err)
 

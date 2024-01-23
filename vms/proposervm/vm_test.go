@@ -564,7 +564,7 @@ func TestCoreBlockFailureCauseProposerBlockParseFailure(t *testing.T) {
 		return nil, errMarshallingFailed
 	}
 	slb, err := statelessblock.Build(
-		proVM.preferred,
+		proVM.State.Preferred(),
 		proVM.Time(),
 		100, // pChainHeight,
 		proVM.StakingCertLeaf,
@@ -613,7 +613,7 @@ func TestTwoProBlocksWrappingSameCoreBlockCanBeParsed(t *testing.T) {
 	blkTimestamp := proVM.Time()
 
 	slb1, err := statelessblock.Build(
-		proVM.preferred,
+		proVM.State.Preferred(),
 		blkTimestamp,
 		100, // pChainHeight,
 		proVM.StakingCertLeaf,
@@ -632,7 +632,7 @@ func TestTwoProBlocksWrappingSameCoreBlockCanBeParsed(t *testing.T) {
 	}
 
 	slb2, err := statelessblock.Build(
-		proVM.preferred,
+		proVM.State.Preferred(),
 		blkTimestamp,
 		200, // pChainHeight,
 		proVM.StakingCertLeaf,
@@ -713,7 +713,7 @@ func TestTwoProBlocksWithSameParentCanBothVerify(t *testing.T) {
 	require.NoError(err)
 
 	netSlb, err := statelessblock.BuildUnsigned(
-		proVM.preferred,
+		proVM.State.Preferred(),
 		proVM.Time(),
 		pChainHeight,
 		netcoreBlk.Bytes(),
