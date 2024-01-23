@@ -1147,12 +1147,14 @@ func (t *Transitive) addUnverifiedBlockToConsensus(
 	issuedMetric prometheus.Counter,
 ) (bool, error) {
 	blkID := blk.ID()
+	blkHeight := blk.Height()
 
 	// make sure this block is valid
 	if err := blk.Verify(ctx); err != nil {
 		t.Ctx.Log.Debug("block verification failed",
 			zap.Stringer("nodeID", nodeID),
 			zap.Stringer("blkID", blkID),
+			zap.Uint64("height", blkHeight),
 			zap.Error(err),
 		)
 
@@ -1169,6 +1171,7 @@ func (t *Transitive) addUnverifiedBlockToConsensus(
 	t.Ctx.Log.Verbo("adding block to consensus",
 		zap.Stringer("nodeID", nodeID),
 		zap.Stringer("blkID", blkID),
+		zap.Uint64("height", blkHeight),
 	)
 	return true, t.Consensus.Add(ctx, &memoryBlock{
 		Block:   blk,
