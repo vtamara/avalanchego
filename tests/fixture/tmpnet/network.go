@@ -463,8 +463,9 @@ func (n *Network) EnsureNodeConfig(node *Node) error {
 	// Set fields including the network path
 	if len(n.Dir) > 0 {
 		node.Flags.SetDefaults(FlagsMap{
-			config.GenesisFileKey:    n.getGenesisPath(),
-			config.ChainConfigDirKey: n.getChainConfigDir(),
+			config.GenesisFileKey:     n.getGenesisPath(),
+			config.ChainConfigDirKey:  n.getChainConfigDir(),
+			config.SubnetConfigDirKey: n.getSubnetDir(),
 		})
 
 		// Ensure the node's data dir is configured
@@ -521,13 +522,13 @@ func (n *Network) CreateSubnets(ctx context.Context, w io.Writer) error {
 		if len(subnet.ValidatorIDs) == 0 {
 			return fmt.Errorf("subnet %s needs at least one validator", subnet.SubnetID)
 		}
-
-		if _, err := fmt.Fprintf(w, "Creating subnet %q\n", subnet.Name); err != nil {
-			return err
-		}
 		if subnet.SubnetID != ids.Empty {
 			// The subnet already exists
 			continue
+		}
+
+		if _, err := fmt.Fprintf(w, "Creating subnet %q\n", subnet.Name); err != nil {
+			return err
 		}
 
 		if subnet.OwningKey == nil {

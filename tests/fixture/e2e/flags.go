@@ -17,6 +17,7 @@ type FlagVars struct {
 	networkDir           string
 	useExistingNetwork   bool
 	networkShutdownDelay uint
+	startNetwork         bool
 }
 
 func (v *FlagVars) AvalancheGoExecPath() string {
@@ -45,6 +46,9 @@ func (v *FlagVars) NetworkShutdownDelay() uint {
 	return v.networkShutdownDelay
 }
 
+func (v *FlagVars) StartNetwork() bool {
+	return v.startNetwork
+}
 func RegisterFlags() *FlagVars {
 	vars := FlagVars{}
 	flag.StringVar(
@@ -76,6 +80,12 @@ func RegisterFlags() *FlagVars {
 		"network-shutdown-delay",
 		0,
 		"[optional] the number of seconds to wait before shutting down the test network at the end of the test run. If collecting metrics, a value greater than the scrape interval is suggested.",
+	)
+	flag.BoolVar(
+		&vars.startNetwork,
+		"start-network",
+		false,
+		"[optional] whether to create a new network and exit. This ensures a network that will survive a failed test run.",
 	)
 
 	return &vars

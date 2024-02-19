@@ -216,7 +216,7 @@ func CheckBootstrapIsPossible(network *tmpnet.Network) {
 }
 
 // Start a temporary network with the provided avalanchego binary.
-func StartNetwork(network *tmpnet.Network, avalancheGoExecPath string, pluginDir string, shutdownDelay uint) {
+func StartNetwork(network *tmpnet.Network, avalancheGoExecPath string, pluginDir string, shutdownDelay uint, cleanup bool) {
 	require := require.New(ginkgo.GinkgoT())
 
 	require.NoError(
@@ -231,6 +231,13 @@ func StartNetwork(network *tmpnet.Network, avalancheGoExecPath string, pluginDir
 		),
 	)
 
+	tests.Outf("{{green}}Successfully started network{{/}}\n")
+
+	if !cleanup {
+		// Network is intended to outlive the test process
+		return
+	}
+
 	ginkgo.DeferCleanup(func() {
 		if shutdownDelay > 0 {
 			tests.Outf("Waiting %d seconds before network shutdown to ensure final metrics scrape\n", shutdownDelay)
@@ -243,5 +250,4 @@ func StartNetwork(network *tmpnet.Network, avalancheGoExecPath string, pluginDir
 		require.NoError(network.Stop(ctx))
 	})
 
-	tests.Outf("{{green}}Successfully started network{{/}}\n")
 }

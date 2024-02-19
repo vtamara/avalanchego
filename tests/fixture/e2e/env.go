@@ -60,6 +60,8 @@ func NewTestEnvironment(flagVars *FlagVars, desiredNetwork *tmpnet.Network) *Tes
 
 	networkDir := flagVars.NetworkDir()
 
+	// TODO(marun) Check that the network is healthy. Maybe start it if necessary?
+
 	// Load or create a test network
 	var network *tmpnet.Network
 	if len(networkDir) > 0 {
@@ -77,14 +79,20 @@ func NewTestEnvironment(flagVars *FlagVars, desiredNetwork *tmpnet.Network) *Tes
 			network.Subnets = append(network.Subnets, subnet)
 		}
 	} else {
+		// Avoid shutting down the network on teardown if the purpose
+		// of this invocation is only to start a new network.
+		cleanupOnExit := !flagVars.StartNetwork()
+
 		network = desiredNetwork
-		StartNetwork(network, flagVars.AvalancheGoExecPath(), flagVars.PluginDir(), flagVars.NetworkShutdownDelay())
+		StartNetwork(network, flagVars.AvalancheGoExecPath(), flagVars.PluginDir(), flagVars.NetworkShutdownDelay(), cleanupOnExit)
 	}
 
 	// A new network will always need subnet creation and an existing
 	// network will also need subnets to be created the first time it
 	// is used.
-	require.NoError(network.CreateSubnets(DefaultContext(), ginkgo.GinkgoWriter))
+	//
+	// TODO(marun) Speed up subnet creation so that it doesn't take more than the default of 2m
+	require.NoError(network.CreateSubnets(ContextWithTimeout(5*time.Minute), ginkgo.GinkgoWriter))
 
 	// Wait for chains to have bootstrapped on all nodes
 	Eventually(func() bool {
@@ -107,7 +115,12 @@ func NewTestEnvironment(flagVars *FlagVars, desiredNetwork *tmpnet.Network) *Tes
 
 	uris := network.GetNodeURIs()
 	require.NotEmpty(uris, "network contains no nodes")
-	tests.Outf("{{green}}network URIs: {{/}} %+v\n", uris)
+	// TODO(marun) Format this better and include the path
+	tests.Outf("{{green}}started network with URIs: {{/}} %+v\n", uris)
+
+	if flagVars.StartNetwork() {
+		os.Exit(0)
+	}
 
 	testDataServerURI, err := fixture.ServeTestData(fixture.TestData{
 		PreFundedKeys: network.PreFundedKeys,
@@ -174,6 +187,7 @@ func (te *TestEnvironment) NewPrivateNetwork() *tmpnet.Network {
 		sharedNetwork.DefaultRuntimeConfig.AvalancheGoPath,
 		pluginDir,
 		te.PrivateNetworkShutdownDelay,
+		true, /* cleanupOnExit */
 	)
 
 	return network
