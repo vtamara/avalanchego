@@ -69,15 +69,6 @@ func NewTestEnvironment(flagVars *FlagVars, desiredNetwork *tmpnet.Network) *Tes
 		network, err = tmpnet.ReadNetwork(networkDir)
 		require.NoError(err)
 		tests.Outf("{{yellow}}Using an existing network configured at %s{{/}}\n", network.Dir)
-
-		// Set the desired subnet configuration to ensure subsequent creation.
-		for _, subnet := range desiredNetwork.Subnets {
-			if existing := network.GetSubnet(subnet.Name); existing != nil {
-				// Already present
-				continue
-			}
-			network.Subnets = append(network.Subnets, subnet)
-		}
 	} else {
 		// Avoid shutting down the network on teardown if the purpose
 		// of this invocation is only to start a new network.
@@ -85,33 +76,27 @@ func NewTestEnvironment(flagVars *FlagVars, desiredNetwork *tmpnet.Network) *Tes
 
 		network = desiredNetwork
 		StartNetwork(network, flagVars.AvalancheGoExecPath(), flagVars.PluginDir(), flagVars.NetworkShutdownDelay(), cleanupOnExit)
-	}
-
-	// A new network will always need subnet creation and an existing
-	// network will also need subnets to be created the first time it
-	// is used.
-	//
-	// TODO(marun) Speed up subnet creation so that it doesn't take more than the default of 2m
-	require.NoError(network.CreateSubnets(ContextWithTimeout(5*time.Minute), ginkgo.GinkgoWriter))
-
-	// Wait for chains to have bootstrapped on all nodes
-	Eventually(func() bool {
-		for _, subnet := range network.Subnets {
-			for _, validatorID := range subnet.ValidatorIDs {
-				uri, err := network.GetURIForNodeID(validatorID)
-				require.NoError(err)
-				infoClient := info.NewClient(uri)
-				for _, chain := range subnet.Chains {
-					isBootstrapped, err := infoClient.IsBootstrapped(DefaultContext(), chain.ChainID.String())
-					// Ignore errors since a chain id that is not yet known will result in a recoverable error.
-					if err != nil || !isBootstrapped {
-						return false
+		// TODO(marun) Speed up subnet creation so that it doesn't take more than the default of 2m
+		require.NoError(network.CreateSubnets(ContextWithTimeout(5*time.Minute), ginkgo.GinkgoWriter))
+		// Wait for chains to have bootstrapped on all nodes
+		Eventually(func() bool {
+			for _, subnet := range network.Subnets {
+				for _, validatorID := range subnet.ValidatorIDs {
+					uri, err := network.GetURIForNodeID(validatorID)
+					require.NoError(err)
+					infoClient := info.NewClient(uri)
+					for _, chain := range subnet.Chains {
+						isBootstrapped, err := infoClient.IsBootstrapped(DefaultContext(), chain.ChainID.String())
+						// Ignore errors since a chain id that is not yet known will result in a recoverable error.
+						if err != nil || !isBootstrapped {
+							return false
+						}
 					}
 				}
 			}
-		}
-		return true
-	}, DefaultTimeout, DefaultPollingInterval, "failed to see all chains bootstrap before timeout")
+			return true
+		}, DefaultTimeout, DefaultPollingInterval, "failed to see all chains bootstrap before timeout")
+	}
 
 	uris := network.GetNodeURIs()
 	require.NotEmpty(uris, "network contains no nodes")
