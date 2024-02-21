@@ -462,11 +462,20 @@ func (n *Network) EnsureNodeConfig(node *Node) error {
 
 	// Set fields including the network path
 	if len(n.Dir) > 0 {
-		node.Flags.SetDefaults(FlagsMap{
-			config.GenesisFileKey:     n.getGenesisPath(),
-			config.ChainConfigDirKey:  n.getChainConfigDir(),
-			config.SubnetConfigDirKey: n.getSubnetDir(),
-		})
+		defaultFlags := FlagsMap{
+			config.GenesisFileKey:    n.getGenesisPath(),
+			config.ChainConfigDirKey: n.getChainConfigDir(),
+		}
+
+		// Only set the subnet dir if it exists or the node won't start.
+		subnetDir := n.getSubnetDir()
+		if _, err := os.Stat(subnetDir); err == nil {
+			defaultFlags[config.SubnetConfigDirKey] = subnetDir
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+
+		node.Flags.SetDefaults(defaultFlags)
 
 		// Ensure the node's data dir is configured
 		dataDir := node.getDataDir()
