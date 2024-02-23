@@ -128,6 +128,7 @@ A temporary network relies on configuration written to disk in the following str
 ```
 HOME
 └── .tmpnet                                              // Root path for the temporary network fixture
+    ├── prometheus_sd                                    // Directory containing file-based service discovery config for prometheus
     └── networks                                         // Default parent directory for temporary networks
         └── c975a433-503d-4d66-957d-643b79f0a7dd         // The UUID of the temporary network is the name of its directory
             ├── NodeID-37E8UK3x2YFsHE3RdALmfWcppcZ1eTuj9 // The ID of a node is the name of its data dir
