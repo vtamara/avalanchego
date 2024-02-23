@@ -222,7 +222,7 @@ func (n *Network) Create(rootDir string) error {
 	if len(rootDir) == 0 {
 		// Use the default root dir
 		var err error
-		rootDir, err = getDefaultRootDir()
+		rootDir, err = getDefaultRootNetworkDir()
 		if err != nil {
 			return err
 		}
@@ -660,12 +660,23 @@ func (n *Network) getBootstrapIPsAndIDs(skippedNode *Node) ([]string, []string, 
 	return bootstrapIPs, bootstrapIDs, nil
 }
 
-// Retrieves the default root dir for storing networks and their
-// configuration.
-func getDefaultRootDir() (string, error) {
+// Retrieves the default path of the given network child dir.
+func getDefaultDir(childDir string) (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(homeDir, ".tmpnet", "networks"), nil
+	return filepath.Join(homeDir, ".tmpnet", childDir), nil
+}
+
+// Retrieves the default root dir for storing networks and their
+// configuration.
+func getDefaultRootNetworkDir() (string, error) {
+	return getDefaultDir("networks")
+}
+
+// Retrieves the default dir for writing service discovery
+// configuration for prometheus.
+func getPrometheusServiceDiscoveryDir() (string, error) {
+	return getDefaultDir("prometheus_sd")
 }
