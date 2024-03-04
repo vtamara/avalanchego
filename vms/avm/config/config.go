@@ -3,10 +3,16 @@
 
 package config
 
-import "time"
+import (
+	"time"
+
+	"github.com/ava-labs/avalanchego/vms/proposervm"
+)
 
 // Struct collecting all the foundational parameters of the AVM
 type Config struct {
+	ProposerVMConfig proposervm.Config
+
 	// Fee that is burned by every non-asset creating transaction
 	TxFee uint64
 

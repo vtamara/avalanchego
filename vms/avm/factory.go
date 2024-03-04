@@ -7,6 +7,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms"
 	"github.com/ava-labs/avalanchego/vms/avm/config"
+	"github.com/ava-labs/avalanchego/vms/proposervm"
 )
 
 var _ vms.Factory = (*Factory)(nil)
@@ -16,5 +17,6 @@ type Factory struct {
 }
 
 func (f *Factory) New(logging.Logger) (interface{}, error) {
-	return &VM{Config: f.Config}, nil
+	vm := &VM{Config: f.Config}
+	return proposervm.New(vm, f.ProposerVMConfig), nil
 }

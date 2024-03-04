@@ -5,7 +5,6 @@ package chains
 
 import (
 	"context"
-	"crypto"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -42,7 +41,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/networking/sender"
 	"github.com/ava-labs/avalanchego/snow/networking/timeout"
 	"github.com/ava-labs/avalanchego/snow/validators"
-	"github.com/ava-labs/avalanchego/staking"
 	"github.com/ava-labs/avalanchego/subnets"
 	"github.com/ava-labs/avalanchego/trace"
 	"github.com/ava-labs/avalanchego/utils/buffer"
@@ -59,7 +57,6 @@ import (
 	"github.com/ava-labs/avalanchego/vms/nftfx"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/propertyfx"
-	"github.com/ava-labs/avalanchego/vms/proposervm"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/avalanchego/vms/tracedvm"
 
@@ -201,8 +198,7 @@ type ManagerConfig struct {
 	CriticalChains            set.Set[ids.ID] // Chains that can't exit gracefully
 	TimeoutManager            timeout.Manager // Manages request timeouts when sending messages to other validators
 	Health                    health.Registerer
-	SubnetConfigs             map[ids.ID]subnets.Config // ID -> SubnetConfig
-	ChainConfigs              map[string]ChainConfig    // alias -> ChainConfig
+	ChainConfigs              map[string]ChainConfig // alias -> ChainConfig
 	// ShutdownNodeFunc allows the chain manager to issue a request to shutdown the node
 	ShutdownNodeFunc func(exitCode int)
 	MeterVMEnabled   bool // Should each VM be wrapped with a MeterVM
@@ -220,9 +216,6 @@ type ManagerConfig struct {
 	// containers in an ancestors message it receives.
 	BootstrapAncestorsMaxContainersReceived int
 
-	ApricotPhase4Time            time.Time
-	ApricotPhase4MinPChainHeight uint64
-
 	// Tracks CPU/disk usage caused by each peer.
 	ResourceTracker timetracker.ResourceTracker
 
@@ -238,9 +231,6 @@ type manager struct {
 	// That is, [chainID].String() is an alias for the chain, too
 	ids.Aliaser
 	ManagerConfig
-
-	stakingSigner crypto.Signer
-	stakingCert   *staking.Certificate
 
 	// Those notified when a chain is created
 	registrants []Registrant
@@ -268,8 +258,6 @@ func New(config *ManagerConfig) Manager {
 	return &manager{
 		Aliaser:                ids.NewAliaser(),
 		ManagerConfig:          *config,
-		stakingSigner:          config.StakingTLSCert.PrivateKey.(crypto.Signer),
-		stakingCert:            staking.CertificateFromX509(config.StakingTLSCert.Leaf),
 		chains:                 make(map[ids.ID]handler.Handler),
 		chainsQueue:            buffer.NewUnboundedBlockingDeque[ChainParameters](initialQueueSize),
 		unblockChainCreatorCh:  make(chan struct{}),
@@ -709,60 +697,29 @@ func (m *manager) createAvalancheChain(
 		return nil, fmt.Errorf("error during vm's Initialize: %w", err)
 	}
 
-	// Initialize the ProposerVM and the vm wrapped inside it
-	var (
-		minBlockDelay       = proposervm.DefaultMinBlockDelay
-		numHistoricalBlocks = proposervm.DefaultNumHistoricalBlocks
-	)
-	if subnetCfg, ok := m.SubnetConfigs[ctx.SubnetID]; ok {
-		minBlockDelay = subnetCfg.ProposerMinBlockDelay
-		numHistoricalBlocks = subnetCfg.ProposerNumHistoricalBlocks
-	}
-	m.Log.Info("creating proposervm wrapper",
-		zap.Time("activationTime", m.ApricotPhase4Time),
-		zap.Uint64("minPChainHeight", m.ApricotPhase4MinPChainHeight),
-		zap.Duration("minBlockDelay", minBlockDelay),
-		zap.Uint64("numHistoricalBlocks", numHistoricalBlocks),
-	)
-
 	chainAlias := m.PrimaryAliasOrDefault(ctx.ChainID)
 
 	// Note: this does not use [dagVM] to ensure we use the [vm]'s height index.
-	untracedVMWrappedInsideProposerVM := NewLinearizeOnInitializeVM(vm)
+	linearizeOnInitializeVM := NewLinearizeOnInitializeVM(vm)
 
-	var vmWrappedInsideProposerVM block.ChainVM = untracedVMWrappedInsideProposerVM
+	var chainVM block.ChainVM = linearizeOnInitializeVM
 	if m.TracingEnabled {
-		vmWrappedInsideProposerVM = tracedvm.NewBlockVM(vmWrappedInsideProposerVM, chainAlias, m.Tracer)
+		chainVM = tracedvm.NewBlockVM(chainVM, chainAlias, m.Tracer)
 	}
-
-	// Note: vmWrappingProposerVM is the VM that the Snowman engines should be
-	// using.
-	var vmWrappingProposerVM block.ChainVM = proposervm.New(
-		vmWrappedInsideProposerVM,
-		proposervm.Config{
-			ActivationTime:      m.ApricotPhase4Time,
-			DurangoTime:         version.GetDurangoTime(m.NetworkID),
-			MinimumPChainHeight: m.ApricotPhase4MinPChainHeight,
-			MinBlkDelay:         minBlockDelay,
-			NumHistoricalBlocks: numHistoricalBlocks,
-			StakingLeafSigner:   m.stakingSigner,
-			StakingCertLeaf:     m.stakingCert,
-		},
-	)
 
 	if m.MeterVMEnabled {
-		vmWrappingProposerVM = metervm.NewBlockVM(vmWrappingProposerVM)
+		chainVM = metervm.NewBlockVM(chainVM)
 	}
 	if m.TracingEnabled {
-		vmWrappingProposerVM = tracedvm.NewBlockVM(vmWrappingProposerVM, "proposervm", m.Tracer)
+		chainVM = tracedvm.NewBlockVM(chainVM, "vm", m.Tracer)
 	}
 
 	// Note: linearizableVM is the VM that the Avalanche engines should be
 	// using.
 	linearizableVM := &initializeOnLinearizeVM{
 		DAGVM:          dagVM,
-		vmToInitialize: vmWrappingProposerVM,
-		vmToLinearize:  untracedVMWrappedInsideProposerVM,
+		vmToInitialize: chainVM,
+		vmToLinearize:  linearizeOnInitializeVM,
 
 		registerer:   snowmanRegisterer,
 		ctx:          ctx.Context,
@@ -813,7 +770,7 @@ func (m *manager) createAvalancheChain(
 	vdrs.RegisterCallbackListener(ctx.SubnetID, startupTracker)
 
 	snowGetHandler, err := snowgetter.New(
-		vmWrappingProposerVM,
+		chainVM,
 		snowmanMessageSender,
 		ctx.Log,
 		m.BootstrapMaxTimeGetAncestors,
@@ -834,7 +791,7 @@ func (m *manager) createAvalancheChain(
 	snowmanEngineConfig := smeng.Config{
 		Ctx:                 ctx,
 		AllGetsServer:       snowGetHandler,
-		VM:                  vmWrappingProposerVM,
+		VM:                  chainVM,
 		Sender:              snowmanMessageSender,
 		Validators:          vdrs,
 		ConnectedValidators: connectedValidators,
@@ -862,7 +819,7 @@ func (m *manager) createAvalancheChain(
 		Timer:                          h,
 		AncestorsMaxContainersReceived: m.BootstrapAncestorsMaxContainersReceived,
 		Blocked:                        blockBlocker,
-		VM:                             vmWrappingProposerVM,
+		VM:                             chainVM,
 	}
 	var snowmanBootstrapper common.BootstrapableEngine
 	snowmanBootstrapper, err = smbootstrap.New(
@@ -1057,50 +1014,22 @@ func (m *manager) createSnowmanChain(
 		}
 	}
 
-	// Initialize the ProposerVM and the vm wrapped inside it
+	// Initialize the VM
 	chainConfig, err := m.getChainConfig(ctx.ChainID)
 	if err != nil {
 		return nil, fmt.Errorf("error while fetching chain config: %w", err)
 	}
-
-	var (
-		minBlockDelay       = proposervm.DefaultMinBlockDelay
-		numHistoricalBlocks = proposervm.DefaultNumHistoricalBlocks
-	)
-	if subnetCfg, ok := m.SubnetConfigs[ctx.SubnetID]; ok {
-		minBlockDelay = subnetCfg.ProposerMinBlockDelay
-		numHistoricalBlocks = subnetCfg.ProposerNumHistoricalBlocks
-	}
-	m.Log.Info("creating proposervm wrapper",
-		zap.Time("activationTime", m.ApricotPhase4Time),
-		zap.Uint64("minPChainHeight", m.ApricotPhase4MinPChainHeight),
-		zap.Duration("minBlockDelay", minBlockDelay),
-		zap.Uint64("numHistoricalBlocks", numHistoricalBlocks),
-	)
 
 	chainAlias := m.PrimaryAliasOrDefault(ctx.ChainID)
 	if m.TracingEnabled {
 		vm = tracedvm.NewBlockVM(vm, chainAlias, m.Tracer)
 	}
 
-	vm = proposervm.New(
-		vm,
-		proposervm.Config{
-			ActivationTime:      m.ApricotPhase4Time,
-			DurangoTime:         version.GetDurangoTime(m.NetworkID),
-			MinimumPChainHeight: m.ApricotPhase4MinPChainHeight,
-			MinBlkDelay:         minBlockDelay,
-			NumHistoricalBlocks: numHistoricalBlocks,
-			StakingLeafSigner:   m.stakingSigner,
-			StakingCertLeaf:     m.stakingCert,
-		},
-	)
-
 	if m.MeterVMEnabled {
 		vm = metervm.NewBlockVM(vm)
 	}
 	if m.TracingEnabled {
-		vm = tracedvm.NewBlockVM(vm, "proposervm", m.Tracer)
+		vm = tracedvm.NewBlockVM(vm, "vm", m.Tracer)
 	}
 
 	// The channel through which a VM may send messages to the consensus engine

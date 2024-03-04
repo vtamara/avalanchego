@@ -7,6 +7,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms"
 	"github.com/ava-labs/avalanchego/vms/platformvm/config"
+	"github.com/ava-labs/avalanchego/vms/proposervm"
 )
 
 var _ vms.Factory = (*Factory)(nil)
@@ -18,5 +19,6 @@ type Factory struct {
 
 // New returns a new instance of the Platform Chain
 func (f *Factory) New(logging.Logger) (interface{}, error) {
-	return &VM{Config: f.Config}, nil
+	vm := &VM{Config: f.Config}
+	return proposervm.New(vm, f.Config.ProposerVMConfig), nil
 }

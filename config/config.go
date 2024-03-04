@@ -45,7 +45,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/timer"
 	"github.com/ava-labs/avalanchego/version"
 	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
-	"github.com/ava-labs/avalanchego/vms/proposervm"
 )
 
 const (
@@ -1122,11 +1121,9 @@ func getSubnetConfigsFromDir(v *viper.Viper, subnetIDs []ids.ID) (map[ids.ID]sub
 
 func getDefaultSubnetConfig(v *viper.Viper) subnets.Config {
 	return subnets.Config{
-		ConsensusParameters:         getConsensusConfig(v),
-		ValidatorOnly:               false,
-		GossipConfig:                getGossipConfig(v),
-		ProposerMinBlockDelay:       proposervm.DefaultMinBlockDelay,
-		ProposerNumHistoricalBlocks: proposervm.DefaultNumHistoricalBlocks,
+		ConsensusParameters: getConsensusConfig(v),
+		ValidatorOnly:       false,
+		GossipConfig:        getGossipConfig(v),
 	}
 }
 

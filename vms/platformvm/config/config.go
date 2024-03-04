@@ -14,10 +14,13 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
+	"github.com/ava-labs/avalanchego/vms/proposervm"
 )
 
 // Struct collecting all foundational parameters of PlatformVM
 type Config struct {
+	ProposerVMConfig proposervm.Config
+
 	// The node's chain manager
 	Chains chains.Manager
 

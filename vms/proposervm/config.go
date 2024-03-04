@@ -20,11 +20,24 @@ type Config struct {
 	// Minimal P-chain height referenced upon block building
 	MinimumPChainHeight uint64
 
-	// Configurable minimal delay among blocks issued consecutively
+	// MinBlkDelay is the minimum delay this node will enforce when
+	// building a snowman++ block.
 	MinBlkDelay time.Duration
 
-	// Maximal number of block indexed.
-	// Zero signals all blocks are indexed.
+	// NumHistoricalBlocks is the number of historical snowman++ blocks
+	// this node will index per chain. If set to 0, the node will index all
+	// snowman++ blocks.
+	//
+	// Note: The last accepted block is not considered a historical block. This
+	// prevents the user from only storing the last accepted block, which can
+	// never be safe due to the non-atomic commits between the proposervm
+	// database and the innerVM's database.
+	//
+	// Invariant: This value must be set such that the proposervm never needs to
+	// rollback more blocks than have been deleted. On startup, the proposervm
+	// rolls back its accepted chain to match the innerVM's accepted chain. If
+	// the innerVM is not persisting its last accepted block quickly enough, the
+	// database can become corrupted.
 	NumHistoricalBlocks uint64
 
 	// Block signer

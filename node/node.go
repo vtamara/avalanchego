@@ -77,6 +77,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/block"
 	"github.com/ava-labs/avalanchego/vms/platformvm/signer"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
+	"github.com/ava-labs/avalanchego/vms/proposervm"
 	"github.com/ava-labs/avalanchego/vms/registry"
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm/runtime"
 
@@ -1082,15 +1083,12 @@ func (n *Node) initChainManager(avaxAssetID ids.ID) error {
 			ShutdownNodeFunc:                        n.Shutdown,
 			MeterVMEnabled:                          n.Config.MeterVMEnabled,
 			Metrics:                                 n.MetricsGatherer,
-			SubnetConfigs:                           n.Config.SubnetConfigs,
 			ChainConfigs:                            n.Config.ChainConfigs,
 			FrontierPollFrequency:                   n.Config.FrontierPollFrequency,
 			ConsensusAppConcurrency:                 n.Config.ConsensusAppConcurrency,
 			BootstrapMaxTimeGetAncestors:            n.Config.BootstrapMaxTimeGetAncestors,
 			BootstrapAncestorsMaxContainersSent:     n.Config.BootstrapAncestorsMaxContainersSent,
 			BootstrapAncestorsMaxContainersReceived: n.Config.BootstrapAncestorsMaxContainersReceived,
-			ApricotPhase4Time:                       version.GetApricotPhase4Time(n.Config.NetworkID),
-			ApricotPhase4MinPChainHeight:            version.ApricotPhase4MinPChainHeight[n.Config.NetworkID],
 			ResourceTracker:                         n.resourceTracker,
 			StateSyncBeacons:                        n.Config.StateSyncIDs,
 			TracingEnabled:                          n.Config.TraceConfig.Enabled,
@@ -1129,10 +1127,22 @@ func (n *Node) initVMs() error {
 		return err
 	}
 
+	// ProposerVM config for primary network chains
+	proposerVMConfig := proposervm.Config{
+		ActivationTime:      version.GetApricotPhase4Time(n.Config.NetworkID),
+		DurangoTime:         version.GetDurangoTime(n.Config.NetworkID),
+		MinimumPChainHeight: version.ApricotPhase4MinPChainHeight[n.Config.NetworkID],
+		MinBlkDelay:         proposervm.DefaultMinBlockDelay,
+		NumHistoricalBlocks: proposervm.DefaultNumHistoricalBlocks,
+		StakingLeafSigner:   n.Config.StakingTLSCert.PrivateKey.(crypto.Signer),
+		StakingCertLeaf:     staking.CertificateFromX509(n.Config.StakingTLSCert.Leaf),
+	}
+
 	// Register the VMs that Avalanche supports
 	err := utils.Err(
 		n.VMManager.RegisterFactory(context.TODO(), constants.PlatformVMID, &platformvm.Factory{
 			Config: platformconfig.Config{
+				ProposerVMConfig:              proposerVMConfig,
 				Chains:                        n.chainManager,
 				Validators:                    vdrs,
 				UptimeLockedCalculator:        n.uptimeCalculator,
@@ -1166,12 +1176,17 @@ func (n *Node) initVMs() error {
 		}),
 		n.VMManager.RegisterFactory(context.TODO(), constants.AVMID, &avm.Factory{
 			Config: avmconfig.Config{
+				ProposerVMConfig: proposerVMConfig,
 				TxFee:            n.Config.TxFee,
 				CreateAssetTxFee: n.Config.CreateAssetTxFee,
 				DurangoTime:      durangoTime,
 			},
 		}),
-		n.VMManager.RegisterFactory(context.TODO(), constants.EVMID, &coreth.Factory{}),
+		n.VMManager.RegisterFactory(context.TODO(), constants.EVMID, &coreth.Factory{
+			FactoryConfig: coreth.FactoryConfig{
+				ProposerVMConfig: proposerVMConfig,
+			},
+		}),
 	)
 	if err != nil {
 		return err
