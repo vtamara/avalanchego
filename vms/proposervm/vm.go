@@ -242,13 +242,21 @@ func (vm *VM) Initialize(
 
 // shutdown ops then propagate shutdown to innerVM
 func (vm *VM) Shutdown(ctx context.Context) error {
-	vm.onShutdown()
-
-	vm.Scheduler.Close()
-
-	if err := vm.db.Commit(); err != nil {
-		return err
+	// TODO remove nil checks after vm.Initialize is removed
+	if vm.onShutdown != nil {
+		vm.onShutdown()
 	}
+
+	if vm.Scheduler != nil {
+		vm.Scheduler.Close()
+	}
+
+	if vm.db != nil {
+		if err := vm.db.Commit(); err != nil {
+			return err
+		}
+	}
+
 	return vm.ChainVM.Shutdown(ctx)
 }
 

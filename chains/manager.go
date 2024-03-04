@@ -57,6 +57,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/nftfx"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/propertyfx"
+	"github.com/ava-labs/avalanchego/vms/proposervm"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/avalanchego/vms/tracedvm"
 
@@ -974,7 +975,12 @@ func (m *manager) createSnowmanChain(
 	// P-Chain is the first chain to be created, we can use it to initialize
 	// required interfaces for the other chains
 	if m.validatorState == nil {
-		valState, ok := vm.(validators.State)
+		proposerVM, ok := vm.(*proposervm.VM)
+		if !ok {
+			return nil, fmt.Errorf("expected proposervm but got: %T", vm)
+		}
+
+		valState, ok := proposerVM.ChainVM.(validators.State)
 		if !ok {
 			return nil, fmt.Errorf("expected validators.State but got %T", vm)
 		}
@@ -1008,7 +1014,7 @@ func (m *manager) createSnowmanChain(
 		}
 
 		// Set up the subnet connector for the P-Chain
-		subnetConnector, ok = vm.(validators.SubnetConnector)
+		subnetConnector, ok = proposerVM.ChainVM.(validators.SubnetConnector)
 		if !ok {
 			return nil, fmt.Errorf("expected validators.SubnetConnector but got %T", vm)
 		}
