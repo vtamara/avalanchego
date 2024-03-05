@@ -153,3 +153,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811 => github.com/vtamara/pebble v0.0.0-20240304195718-33499868d65e
+
+replace github.com/ava-labs/coreth v0.13.0-rc.0 => github.com/vtamara/coreth v0.13.0-rc.0.0.20240305224921-6c52870ee82f
