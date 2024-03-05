@@ -69,6 +69,10 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
+replace github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811 => github.com/vtamara/pebble v0.0.0-20240304195718-33499868d65e
+
+replace github.com/ava-labs/coreth v0.13.0-rc.0 => github.com/vtamara/coreth v0.13.0-rc.0.0.20240305224921-6c52870ee82f
+
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
