@@ -65,7 +65,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
-replace github.com/ava-labs/coreth v0.12.4-rc.4 => github.com/vtamara/coreth v0.12.4adJ74
+replace github.com/ava-labs/coreth v0.12.4-rc.4 => github.com/vtamara/coreth v0.12.5-0.20240306151022-7ddc9b9dcf46
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.10.0 // indirect
@@ -150,6 +150,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-
 replace github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811 => github.com/vtamara/pebble v0.0.0-20240304195718-33499868d65e
-
