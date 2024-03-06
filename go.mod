@@ -67,6 +67,10 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
+replace github.com/ava-labs/avalanche-network-runner-sdk v0.3.0 => github.com/vtamara/avalanche-network-runner-sdk v0.3.0adJ74
+
+replace github.com/ava-labs/coreth v0.12.5-rc.6 => github.com/vtamara/coreth v0.12.5adJ74
+
 require (
 	github.com/VictoriaMetrics/fastcache v1.10.0 // indirect
 	github.com/benbjohnson/clock v1.3.0 // indirect
