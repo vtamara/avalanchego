@@ -157,3 +157,5 @@ require (
 )
 
 replace github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811 => github.com/vtamara/pebble v0.0.0-20240304195718-33499868d65e
+
+replace github.com/supranational/blst v0.3.11 => github.com/dot-asm/blst v0.1.1-0.20240309172718-1e1fab113d0e
