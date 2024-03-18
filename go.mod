@@ -158,5 +158,4 @@ replace github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811 => gith
 
 replace github.com/ava-labs/coreth v0.13.0-rc.0 => github.com/vtamara/coreth v0.13.0-rc.0.0.20240305224921-6c52870ee82f
 
-replace github.com/supranational/blst v0.3.11 => github.com/supranational/blst
-main
+replace github.com/supranational/blst v0.3.11 => github.com/supranational/blst v0.3.12-0.20240316125559-704c7f6d5f99
