@@ -69,6 +69,8 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
+replace github.com/ava-labs/coreth v0.12.11-rc.3 => github.com/vtamara/coreth v0.12.11-rc.3.0.20240318164227-d508dcf1a288
+
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
@@ -154,6 +156,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
+replace github.com/supranational/blst v0.3.11 => github.com/supranational/blst v0.3.12-0.20240316125559-704c7f6d5f99
 
 replace github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811 => github.com/vtamara/pebble v0.0.0-20240304195718-33499868d65e
-
