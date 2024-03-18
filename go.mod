@@ -69,9 +69,9 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
-replace github.com/ava-labs/coreth v0.12.5-rc.6 => github.com/vtamara/coreth v0.12.6-0.20240306025741-04c5f80e4ec0
+replace github.com/ava-labs/coreth v0.12.5-rc.6 => github.com/vtamara/coreth v0.12.6-0.20240318155409-2446b75c3d76
 
-replace github.com/supranational/blst v0.3.11 => github.com/dot-asm/blst v0.1.1-0.20240309172718-1e1fab113d0e
+replace github.com/supranational/blst v0.3.11 => github.com/supranational/blst v0.3.12-0.20240316125559-704c7f6d5f99
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.10.0 // indirect
