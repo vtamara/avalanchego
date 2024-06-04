@@ -11,5 +11,10 @@ EXCLUDED_TARGETS="| grep -v /mocks | grep -v proto | grep -v tests/e2e | grep -v
 
 TEST_TARGETS="$(eval "go list ./... ${EXCLUDED_TARGETS}")"
 
+OPRACE="-race"
+UNAME="$(eval uname)"
+if (test "$UNAME" = "OpenBSD") then {
+  OPRACE=""
+} fi;
 # shellcheck disable=SC2086
-go test -shuffle=on -race -timeout="${TIMEOUT:-120s}" -coverprofile="coverage.out" -covermode="atomic" ${TEST_TARGETS}
+go test -shuffle=on $OPRACE -timeout="${TIMEOUT:-120s}" -coverprofile="coverage.out" -covermode="atomic" ${TEST_TARGETS}
