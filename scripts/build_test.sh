@@ -17,5 +17,10 @@ fi
 
 TEST_TARGETS="$(eval "go list ./... ${EXCLUDED_TARGETS}")"
 
+OPRACE="-race"
+UNAME="$(eval uname)"
+if (test "$UNAME" = "OpenBSD") then {
+  OPRACE=""
+} fi;
 # shellcheck disable=SC2086
-go test -tags test -shuffle=on -race -timeout="${TIMEOUT:-120s}" -coverprofile="coverage.out" -covermode="atomic" ${TEST_TARGETS}
+go test -tags test -shuffle=on $OPRACE -timeout="${TIMEOUT:-120s}" -coverprofile="coverage.out" -covermode="atomic" ${TEST_TARGETS}
