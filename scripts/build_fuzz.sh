@@ -15,14 +15,20 @@ AVALANCHE_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )"; cd .. && pwd )
 # Load the constants
 source "$AVALANCHE_PATH"/scripts/constants.sh
 
+GREP=grep
+UNAME=`uname`
+if (test "$UNAME" = "OpenBSD") then {
+  GREP=ggrep
+} fi;
+
 fuzzTime=${1:-1}
 fuzzDir=${2:-.}
 
-files=$(grep -r --include='**_test.go' --files-with-matches 'func Fuzz' "$fuzzDir")
+files=$(${GREP} -r --include='**_test.go' --files-with-matches 'func Fuzz' "$fuzzDir")
 failed=false
 for file in ${files}
 do
-    funcs=$(grep -oP 'func \K(Fuzz\w*)' "$file")
+    funcs=$(${GREP} -oP 'func \K(Fuzz\w*)' "$file")
     for func in ${funcs}
     do
         echo "Fuzzing $func in $file"

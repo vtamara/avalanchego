@@ -7,11 +7,16 @@ if ! [[ "$0" =~ scripts/lint.sh ]]; then
   exit 255
 fi
 
+GREP=grep
+UNAME=`uname`
+if (test "$UNAME" = "OpenBSD") then {
+  GREP=ggrep
+} fi;
 # The -P option is not supported by the grep version installed by
 # default on macos. Since `-o errexit` is ignored in an if
 # conditional, triggering the problem here ensures script failure when
 # using an unsupported version of grep.
-grep -P 'lint.sh' scripts/lint.sh &> /dev/null || (\
+${GREP} -P 'lint.sh' scripts/lint.sh &> /dev/null || (\
   >&2 echo "error: This script requires a recent version of gnu grep.";\
   >&2 echo "       On macos, gnu grep can be installed with 'brew install grep'.";\
   >&2 echo "       It will also be necessary to ensure that gnu grep is available in the path.";\
@@ -53,21 +58,21 @@ function test_license_header {
 }
 
 function test_single_import {
-  if grep -R -zo -P 'import \(\n\t".*"\n\)' .; then
+  if ${GREP} -R -zo -P 'import \(\n\t".*"\n\)' .; then
     echo ""
     return 1
   fi
 }
 
 function test_require_error_is_no_funcs_as_params {
-  if grep -R -zo -P 'require.ErrorIs\(.+?\)[^\n]*\)\n' .; then
+  if ${GREP} -R -zo -P 'require.ErrorIs\(.+?\)[^\n]*\)\n' .; then
     echo ""
     return 1
   fi
 }
 
 function test_require_no_error_inline_func {
-  if grep -R -zo -P '\t+err :?= ((?!require|if).|\n)*require\.NoError\((t, )?err\)' .; then
+  if ${GREP} -R -zo -P '\t+err :?= ((?!require|if).|\n)*require\.NoError\((t, )?err\)' .; then
     echo ""
     echo "Checking that a function with a single error return doesn't error should be done in-line."
     echo ""
@@ -77,7 +82,7 @@ function test_require_no_error_inline_func {
 
 # Ref: https://go.dev/doc/effective_go#blank_implements
 function test_interface_compliance_nil {
-  if grep -R -o -P '_ .+? = &.+?\{\}' .; then
+  if ${GREP} -R -o -P '_ .+? = &.+?\{\}' .; then
     echo ""
     echo "Interface compliance checks need to be of the form:"
     echo "  var _ json.Marshaler = (*RawMessage)(nil)"
